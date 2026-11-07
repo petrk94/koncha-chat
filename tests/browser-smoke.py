@@ -11,6 +11,18 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def wait_js(page, js, arg=None, timeout_ms=12000):
+    """Bounded CDP/WebDriver page.evaluate polling: unlike wait_for_function,
+    it does not invoke string eval, which Koncha's strict CSP rightly blocks.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if page.evaluate(js, arg):
+            return
+        time.sleep(0.15)
+    raise AssertionError("Timed out waiting for in-page condition")
+
 PORT = 18787
 with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
     p = subprocess.Popen(['php','-S',f'127.0.0.1:{PORT}','-t','public'],cwd=ROOT,env={**os.environ,'KONCHA_DATA_DIR':temp},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -50,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#chatPreferences').wait_for(state='visible')
             assert pagea.locator('#messages').bounding_box()['height'] > 400, 'Settings must not shrink chat log'
             pagea.locator('#shareBtn').click()
-            pagea.wait_for_function("async () => (await navigator.clipboard.readText()).includes('handle=alex.becker')", timeout=12000)
+            wait_js(pagea, "async () => (await navigator.clipboard.readText()).includes('handle=alex.becker')")
             invite = pagea.evaluate('navigator.clipboard.readText()')
             assert 'from=Alex' in invite and 'handle=alex.becker' in invite
             pageb.goto(invite)
@@ -82,12 +94,12 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:true})")
             pageb.locator('#messageInput').fill('Message while other tab is hidden')
             pageb.locator('#sendBtn').click()
-            pagea.wait_for_function("document.title.startsWith('(1)')", timeout=10000)
+            wait_js(pagea, "() => document.title.startsWith('(1)')", timeout_ms=10000)
             assert pagea.locator('link[rel=icon]').get_attribute('href').startswith('data:image/svg+xml,')
             pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))")
-            pagea.wait_for_function("!document.title.startsWith('(')", timeout=4000)
+            wait_js(pagea, "() => !document.title.startsWith('(')", timeout_ms=4000)
             # Offline app shell must exist; API responses and chat content must not.
-            pagea.wait_for_function("async () => (await caches.keys()).some(n => n.startsWith('koncha-shell-'))", timeout=15000)
+            wait_js(pagea, "async () => (await caches.keys()).some(n => n.startsWith('koncha-shell-'))", timeout_ms=15000)
             assert pagea.evaluate("async () => { const ns=await caches.keys();const c=await caches.open(ns.find(n=>n.startsWith('koncha-shell-')));return !!(await c.match('/index.html')); }"), 'App shell missing from browser cache'
             assert pagea.evaluate("async () => { const ns=await caches.keys();const c=await caches.open(ns.find(n=>n.startsWith('koncha-shell-')));return !(await c.match('/api.php')); }"), 'API response must not be cached'
             # 0.5 multi-room integration: inviter can open a second independent chat.
@@ -98,7 +110,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#chat').wait_for(state='visible')
             pagea.locator('#settingsBtn').click()
             pagea.locator('#shareBtn').click()
-            pagea.wait_for_function("async old => { const next=await navigator.clipboard.readText(); return next !== old && next.includes('handle=alex.becker'); }", arg=invite, timeout=12000)
+            wait_js(pagea, "async old => { const next=await navigator.clipboard.readText(); return next !== old && next.includes('handle=alex.becker'); }", arg=invite)
             second_invite = pagea.evaluate('navigator.clipboard.readText()')
             assert second_invite != invite
             pagec_context = browser.new_context(permissions=['clipboard-read','clipboard-write'])
