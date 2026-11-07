@@ -141,6 +141,16 @@ export async function getOlmHistory(roomId){
   });
   return Promise.all(rows.map(async row=>({id:row.id,payload:await decryptLocal(row.sealed)})));
 }
+export async function getOlmKnownIds(roomId){
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(HISTORY).objectStore(HISTORY).getAllKeys();
+    req.onsuccess=()=>resolve(req.result
+      .filter(key=>typeof key==='string'&&key.startsWith(roomId+':'))
+      .map(key=>key.slice(roomId.length+1)));
+    req.onerror=()=>reject(req.error);
+  });
+}
 export async function getOlmOutbox(roomId){
   const db=await openDB();
   return new Promise((resolve,reject)=>{
