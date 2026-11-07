@@ -25,10 +25,15 @@ function pushPrivateKey(): OpenSSLAsymmetricKey|null {
 }
 function pushPublicKey(OpenSSLAsymmetricKey $key): string {
     $details = openssl_pkey_get_details($key);
-    if (!is_array($details) || strlen($details['ec']['x'] ?? '') !== 32 || strlen($details['ec']['y'] ?? '') !== 32) {
+    $x = $details['ec']['x'] ?? null;
+    $y = $details['ec']['y'] ?? null;
+    if (!is_string($x) || !is_string($y) || strlen($x) < 1 || strlen($y) < 1 ||
+        strlen($x) > 32 || strlen($y) > 32) {
         throw new RuntimeException('Invalid VAPID key material');
     }
-    return pushB64("\x04" . $details['ec']['x'] . $details['ec']['y']);
+    // OpenSSL may omit leading zero bytes in P-256 coordinates. Fixed-size
+    // uncompressed keys require x and y to be zero-left-padded to 32 bytes.
+    return pushB64("\x04" . str_pad($x, 32, "\0", STR_PAD_LEFT) . str_pad($y, 32, "\0", STR_PAD_LEFT));
 }
 function pushSubject(): ?string {
     $subject = getenv('KONCHA_VAPID_SUBJECT') ?: '';
