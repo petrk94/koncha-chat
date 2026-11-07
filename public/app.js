@@ -14,6 +14,12 @@ import { normalizeRooms, upsertRoom, labelForRoom } from './rooms.js';
 import { translationCapabilities } from './translation-capabilities.js';
 import { runTranslationSelfTest } from './translation-selftest.js';
 import { subscribeRoomPush, unsubscribeRoomPush } from './push-client.js';
+import {
+  isOlmRoom, createSecureRoom, rotateSecureInvite, acceptSecureInvite,
+  receiveSecureEnvelope, sendSecureMessage, retrySecureOutbox,
+  visibleSecureMessages, ownSecureFingerprint, localOlmFingerprint
+} from './olm-transport.js';
+import { readOlmState, getOlmHistory, getOlmKnownIds } from './olm-store.js';
 
 const $ = id => document.getElementById(id);
 const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
@@ -63,7 +69,8 @@ function updateConversation() {
   const label = peer?.alias || t('chatName');
   $('contactName').textContent = label;
   $('headerAvatar').textContent = avatarFor(peer?.alias);
-  $('contactHandle').textContent = peer?.handle ? '@' + peer.handle : '';
+  $('contactHandle').textContent = (peer?.handle ? '@' + peer.handle + ' · ' : '')
+    + (isOlmRoom(room) ? t('olmActive') : t('olmLegacy'));
   void refreshDeviceCodes();
   renderRoomIndex();
 }
@@ -113,10 +120,13 @@ async function initializeDeviceKey() {
 }
 async function refreshDeviceCodes() {
   if (!identity || !room) return;
-  $('deviceFingerprint').textContent = identity.fingerprint || '—';
-  $('peerFingerprint').textContent = room.peer?.publicKey ? await deviceFingerprint(room.peer.publicKey).catch(() => '—') : t('peerUnknown');
+  const secure = isOlmRoom(room);
+  $('deviceFingerprint').textContent = secure ? await ownSecureFingerprint(room).catch(()=> '—') : identity.fingerprint || '—';
+  $('peerFingerprint').textContent = secure
+    ? room.peer?.olmCurve ? await localOlmFingerprint(room.peer.olmCurve,room.peer.olmEd||'').catch(()=> '—') : t('peerUnknown')
+    : room.peer?.publicKey ? await deviceFingerprint(room.peer.publicKey).catch(() => '—') : t('peerUnknown');
   $('verificationState').textContent = room.peer?.verified ? t('peerVerified') : t('peerUnverified');
-  $('verifyPeerBtn').disabled = !room.peer?.publicKey || !!room.peer?.verified;
+  $('verifyPeerBtn').disabled = secure ? !room.peer?.olmCurve || !!room.peer?.verified : !room.peer?.publicKey || !!room.peer?.verified;
 }
 async function checkedMessage(chatRoom, chatKeys, envelope, fromLocalCache = false) {
   const message = await decryptPayload(chatKeys.messageKey, envelope);
@@ -263,6 +273,7 @@ async function claimPendingInvite() {
     const result = await api('invite_claim', { method: 'POST', authenticated: false,
       body: { roomId: inv.roomId, inviteId: inv.inviteId, verifier: await tokenVerifier(inv.token) } });
     const claimedRoom = await unsealInvite(inv, result.payload);
+    if (isOlmRoom(claimedRoom)) await acceptSecureInvite(claimedRoom, identity);
     pendingInvite = null; invitationAccepted = false;
     await openRoom(claimedRoom);
   } catch (error) { inviteProblem(error); }
@@ -278,7 +289,9 @@ async function openRoom(next) {
   pollIsInitialized = false;
   room = next;
   if (!room.presenceId) room.presenceId = randomId(12);
-  keys = await deriveRoomKeys(room);
+  keys = await deriveRoomKeys(room); // relay-only auth for Olm rooms, no chat AES.
+  if (isOlmRoom(room) && !await readOlmState(room.roomId))
+    throw new Error('Missing original Olm session; key recovery is unavailable');
   // Saved conversations remain readable from IndexedDB without a network.
   // New rooms still require the relay to initialize successfully.
   const alreadySaved = rooms.some(item => item.roomId === room.roomId);
@@ -287,7 +300,9 @@ async function openRoom(next) {
   await saveRoomRecord(room);
   lastErrorShown = false;
   activeInvite = null;
-  currentMessages = await getMessages(room.roomId);
+  currentMessages = isOlmRoom(room)
+    ? (await getOlmHistory(room.roomId)).map(entry => ({id:entry.id,v:2}))
+    : await getMessages(room.roomId);
   updateConversation();
   $('connection').textContent = t('connecting');
   $('chatDeviceId').textContent = identity.id.slice(0, 12) + '…';
@@ -295,9 +310,38 @@ async function openRoom(next) {
   screen('chat');
   await restoreChatPreferences();
   await renderMessages();
-  await poll();
+  await poll(); // also flushes durable Olm handshake/outbox; safe to retry.
   pollTimer = setInterval(() => { void poll(); }, 2800);
   if (presenceEnabled) void pulsePresence();
+}
+/** Strict v2 processing: never attempt AES room-key decryption as fallback.
+ * Olm state is durably committed before a message is displayed or ACKed.
+ */
+async function acceptIncomingSecure(chatRoom,envelope){
+  const received=await receiveSecureEnvelope(chatRoom,envelope);
+  if(!received.fresh)return received;
+  if(received.peer){
+    const before=chatRoom.peer||{};
+    // A pinned human-verified identity must never be changed silently.
+    if(before.verified && before.olmCurve && before.olmCurve!==received.peer.olmCurve)
+      throw new Error('Verified device identity changed');
+    chatRoom.peer={...before,...received.peer,
+      verified:!!before.verified && before.olmCurve===received.peer.olmCurve};
+    await saveRoomRecord(chatRoom);
+    if(room?.roomId===chatRoom.roomId)updateConversation();
+  }
+  if(received.handshaken){
+    // Olm prekey message is now stored; responder ratchets and queues ACK.
+    await sendSecureMessage(chatRoom,identity,'','hello_ack');
+  }
+  return received;
+}
+async function flushSecure(chatRoom,chatKeys){
+  if(!isOlmRoom(chatRoom))return;
+  await retrySecureOutbox(chatRoom,envelope=>api('send',{
+    method:'POST',body:{envelope,senderPresenceId:chatRoom.presenceId||''},
+    contextRoom:chatRoom,contextKeys:chatKeys
+  }));
 }
 async function poll() {
   if (polling || !room || !keys) return;
@@ -305,6 +349,7 @@ async function poll() {
   try {
     const snapshotRoom = room;
     const snapshotKeys = keys;
+    if(isOlmRoom(snapshotRoom)) await flushSecure(snapshotRoom,snapshotKeys);
     const received = await api('list', { contextRoom: snapshotRoom, contextKeys: snapshotKeys });
     if (room !== snapshotRoom) return;
     const known = new Set(currentMessages.map(m => m.id));
@@ -313,17 +358,24 @@ async function poll() {
     for (const envelope of received.messages || []) {
       if (known.has(envelope.id)) continue;
       try {
-        const message = await checkedMessage(snapshotRoom, snapshotKeys, envelope);
-        const stored = message.signature
-          ? await putVerifiedMessage(snapshotRoom.roomId, envelope, message.senderId, message.nonce)
-          : (await putMessage(snapshotRoom.roomId, envelope), true);
-        if (!stored) continue;
-        if (message.senderId !== identity.id) newFromOthers++;
+        if(isOlmRoom(snapshotRoom)){
+          const result=await acceptIncomingSecure(snapshotRoom,envelope);
+          if(!result.fresh)continue;
+          if(result.type==='chat'&&result.payload.senderId!==identity.id)newFromOthers++;
+        } else {
+          const message=await checkedMessage(snapshotRoom,snapshotKeys,envelope);
+          const stored=message.signature
+            ? await putVerifiedMessage(snapshotRoom.roomId,envelope,message.senderId,message.nonce)
+            : (await putMessage(snapshotRoom.roomId,envelope),true);
+          if(!stored)continue;
+          if(message.senderId!==identity.id)newFromOthers++;
+        }
         currentMessages.push(envelope);
         known.add(envelope.id);
-        changed = true;
-      } catch { /* Ignore unauthenticated ciphertext. */ }
+        changed=true;
+      } catch { /* Reject unsigned, corrupted and wrong-session messages. */ }
     }
+    if(isOlmRoom(snapshotRoom)) await flushSecure(snapshotRoom,snapshotKeys);
     if (changed) await renderMessages();
     // Initial sync may contain old messages. Only alert for later arrivals.
     if (pollIsInitialized && newFromOthers > 0) attention.incoming(newFromOthers);
@@ -341,11 +393,17 @@ async function renderMessages() {
   const container = $('messages');
   container.replaceChildren();
   const displayed = [];
-  for (const envelope of currentMessages) {
-    try {
-      const data = await checkedMessage(room, keys, envelope, true);
-      displayed.push({ ...data, id: envelope.id });
-    } catch { /* Corrupted local data is never displayed. */ }
+  if(isOlmRoom(room)){
+    // Double Ratchet deliberately destroys older message keys. Persisted local
+    // display history is independently encrypted in IndexedDB at receipt.
+    displayed.push(...await visibleSecureMessages(room));
+  }else{
+    for (const envelope of currentMessages) {
+      try {
+        const data = await checkedMessage(room, keys, envelope, true);
+        displayed.push({ ...data, id: envelope.id });
+      } catch { /* Corrupted local data is never displayed. */ }
+    }
   }
   if (generation !== translationGeneration) return;
   displayed.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
@@ -400,6 +458,7 @@ function updateInviteCountdown() {
   $('inviteCountdown').textContent = `${t('inviteExpires')}: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 async function makeInvite() {
+  if (isOlmRoom(room)) await rotateSecureInvite(room);
   const inv = createInvite(room, identity);
   const [verifier, payload] = await Promise.all([tokenVerifier(inv.token), sealInvite(inv, room)]);
   const result = await api('invite_create', { method: 'POST', body: { inviteId: inv.inviteId, verifier, payload } });
@@ -491,23 +550,32 @@ async function pollOtherRooms() {
       if (room?.roomId === chatRoom.roomId) continue;
       try {
         const chatKeys = await deriveRoomKeys(chatRoom);
+        if(isOlmRoom(chatRoom))await flushSecure(chatRoom,chatKeys);
         const [remote, cached] = await Promise.all([
-          api('list', { contextRoom: chatRoom, contextKeys: chatKeys }), getMessages(chatRoom.roomId)
+          api('list', { contextRoom: chatRoom, contextKeys: chatKeys }),
+          isOlmRoom(chatRoom) ? getOlmKnownIds(chatRoom.roomId) : getMessages(chatRoom.roomId)
         ]);
-        const known = new Set(cached.map(e => e.id));
+        const known = new Set(cached.map(e => typeof e==='string'?e:e.id));
         let incomingCount = 0;
         for (const envelope of remote.messages || []) {
           if (known.has(envelope.id)) continue;
           try {
-            const msg = await checkedMessage(chatRoom, chatKeys, envelope);
-            const stored = msg.signature
-              ? await putVerifiedMessage(chatRoom.roomId, envelope, msg.senderId, msg.nonce)
-              : (await putMessage(chatRoom.roomId, envelope), true);
-            if (!stored) continue;
+            if(isOlmRoom(chatRoom)){
+              const result=await acceptIncomingSecure(chatRoom,envelope);
+              if(!result.fresh)continue;
+              if(result.type==='chat'&&result.payload.senderId!==identity.id)incomingCount++;
+            }else{
+              const msg=await checkedMessage(chatRoom,chatKeys,envelope);
+              const stored=msg.signature
+                ? await putVerifiedMessage(chatRoom.roomId,envelope,msg.senderId,msg.nonce)
+                : (await putMessage(chatRoom.roomId,envelope),true);
+              if(!stored)continue;
+              if(msg.senderId!==identity.id)incomingCount++;
+            }
             known.add(envelope.id);
-            if (msg.senderId !== identity.id) incomingCount++;
-          } catch { /* Invalid signatures, ciphertext or rotated keys are discarded. */ }
+          } catch { /* Wrong keys, stale ciphertext and downgrades are rejected. */ }
         }
+        if(isOlmRoom(chatRoom))await flushSecure(chatRoom,chatKeys);
         if (roomPrimed.has(chatRoom.roomId) && incomingCount > 0) {
           unreadByRoom.set(chatRoom.roomId, (unreadByRoom.get(chatRoom.roomId) || 0) + incomingCount);
           attention.incoming(incomingCount);
@@ -556,8 +624,10 @@ $('presenceToggle').addEventListener('change', async () => {
   if (room && keys) await refreshPresence(room, keys);
 });
 $('verifyPeerBtn').addEventListener('click', async () => {
-  if (!room?.peer?.publicKey || room.peer.verified) return;
-  const code = await deviceFingerprint(room.peer.publicKey);
+  if (!room?.peer || room.peer.verified) return;
+  const code = isOlmRoom(room)
+    ? await localOlmFingerprint(room.peer.olmCurve,room.peer.olmEd||'')
+    : await deviceFingerprint(room.peer.publicKey);
   if (!confirm(`${t('verifyInstructions')}\n\n${code}`)) return;
   room.peer.verified = true;
   await saveRoomRecord(room);
@@ -606,7 +676,8 @@ $('startBtn').addEventListener('click', async () => {
   } catch (error) { toast(`${t('localError')}: ${error.message}`); }
 });
 $('createBtn').addEventListener('click', async () => {
-  try { await openRoom({ ...createRoom(), requireSignatures: true }); } catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
+  try { await openRoom(await createSecureRoom()); }
+  catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
 });
 $('joinBtn').addEventListener('click', async () => {
   if (!pendingInvite) return;
@@ -679,12 +750,25 @@ $('sendForm').addEventListener('submit', async event => {
   if (!room || !keys || !text) return;
   $('sendBtn').disabled = true;
   try {
-    const signed = await signChatPayload(deviceKeyPair, room.roomId, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now(), nonce: randomId(16), presenceId: room.presenceId });
-    const envelope = await encryptPayload(keys.messageKey, signed);
-    await api('send', { method: 'POST', body: { envelope, senderPresenceId: room.presenceId } });
-    await putVerifiedMessage(room.roomId, envelope, identity.id, signed.nonce);
-    currentMessages.push(envelope); field.value = '';
-    await renderMessages();
+    if(isOlmRoom(room)){
+      // Ratchet and ciphertext are already committed in IndexedDB before any
+      // network request. A failed send is retried with EXACT same envelope.
+      const sent=await sendSecureMessage(room,identity,text);
+      currentMessages.push(sent.envelope);field.value='';
+      await renderMessages();
+      try { await flushSecure(room,keys); }
+      catch { toast(t('offline')+' — encrypted message queued locally'); }
+    }else{
+      // Existing pre-0.8 rooms remain READABLE but explicitly legacy.
+      const signed=await signChatPayload(deviceKeyPair,room.roomId,{text,sender:identity.alias,
+        senderHandle:identity.handle,senderId:identity.id,ts:Date.now(),
+        nonce:randomId(16),presenceId:room.presenceId});
+      const envelope=await encryptPayload(keys.messageKey,signed);
+      await api('send',{method:'POST',body:{envelope,senderPresenceId:room.presenceId}});
+      await putVerifiedMessage(room.roomId,envelope,identity.id,signed.nonce);
+      currentMessages.push(envelope);field.value='';
+      await renderMessages();
+    }
   } catch (error) { toast(`${t('sendError')}: ${error.message}`); }
   finally { $('sendBtn').disabled = false; field.focus(); }
 });

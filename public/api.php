@@ -36,13 +36,27 @@ function postJson(): array {
     return $data;
 }
 function validEnvelope(mixed $value): bool {
-    return is_array($value) && ($value['v'] ?? null) === 1
-        && is_string($value['id'] ?? null)
-        && preg_match('/^[a-f0-9-]{36}$/D', $value['id']) === 1
-        && exact($value['iv'] ?? null, 16)
-        && is_string($value['ciphertext'] ?? null)
-        && strlen($value['ciphertext']) <= 11000
-        && preg_match('/^[A-Za-z0-9_-]{24,11000}$/D', $value['ciphertext']) === 1;
+    if (!is_array($value) || !is_string($value['id'] ?? null) ||
+        preg_match('/^[a-f0-9-]{36}$/D', $value['id']) !== 1) return false;
+    if (($value['v'] ?? null) === 1) {
+        return exact($value['iv'] ?? null, 16)
+            && is_string($value['ciphertext'] ?? null)
+            && strlen($value['ciphertext']) <= 11000
+            && preg_match('/^[A-Za-z0-9_-]{24,11000}$/D', $value['ciphertext']) === 1;
+    }
+    // Actual Olm ciphertext: no AES-GCM room-key envelope and no plaintext.
+    if (($value['v'] ?? null) === 2) {
+        $message = $value['olm'] ?? null;
+        return is_array($message)
+            && in_array($message['type'] ?? null, [0, 1], true)
+            && is_string($message['body'] ?? null)
+            && strlen($message['body']) >= 24
+            && strlen($message['body']) <= 11000
+            && preg_match('/^[A-Za-z0-9+\/=]+$/D', $message['body']) === 1
+            && is_string($value['senderCurve'] ?? null)
+            && preg_match('/^[A-Za-z0-9+\/]{43}=?$/D', $value['senderCurve']) === 1;
+    }
+    return false;
 }
 function validInvitePayload(mixed $value): bool {
     return is_array($value) && exact($value['iv'] ?? null, 16)
@@ -172,7 +186,7 @@ try {
             if ($msg['id'] === $envelope['id']) { $exists = true; break; }
         }
         if (!$exists) {
-            $envelope = array_intersect_key($envelope, array_flip(['v','id','iv','ciphertext']));
+            $envelope = array_intersect_key($envelope, array_flip(($envelope['v'] === 2) ? ['v','id','senderCurve','olm'] : ['v','id','iv','ciphertext']));
             $envelope['storedAt'] = time();
             $state['messages'][] = $envelope;
             $modified = true;

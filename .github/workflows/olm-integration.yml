@@ -1,0 +1,50 @@
+name: Koncha Olm forward secrecy integration
+on:
+  pull_request:
+    paths:
+      - 'crypto-wasm/**'
+      - 'public/olm-*.js'
+      - 'public/crypto.js'
+      - 'public/app.js'
+      - 'public/db.js'
+      - 'public/api.php'
+      - 'tests/olm-*.py'
+      - 'tests/secure-*.py'
+      - '.github/workflows/olm-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  wasm-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Prepare Rust WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Compile native Rust bindings
+        run: cargo check --manifest-path crypto-wasm/Cargo.toml
+      - name: Install pinned wasm-pack CLI
+        run: npm install --no-save --no-package-lock wasm-pack@0.15.1
+      - name: Build self-hosted vodozemac browser runtime
+        run: npm run crypto:build
+      - name: Install actual browser test engine
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Verify actual vodozemac WASM Olm ratchet
+        run: python tests/olm-wasm-browser.py
+      - name: Two-browser Koncha Olm invite, reply and restart
+        run: python tests/secure-chat-browser.py
+      - name: Run existing Node/PHP regressions
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: koncha-olm-runtime
+          path: public/vendor/olm/
+          if-no-files-found: error
+          retention-days: 7
