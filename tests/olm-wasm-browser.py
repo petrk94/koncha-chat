@@ -38,7 +38,8 @@ with tempfile.TemporaryDirectory(prefix='koncha-olm-') as tmp:
                   const received = JSON.parse(wasm.open_message(JSON.stringify(ack.session), JSON.stringify(followup.message)));
                   if (received.text !== 'History secrecy test') throw new Error('Ratchet failed');
                   let tampered=false;
-                  const corrupt={...followup.message,body:'A'+followup.message.body.slice(1)};
+                  const first = followup.message.body[0];
+                  const corrupt={...followup.message,body:(first==='A'?'B':'A')+followup.message.body.slice(1)};
                   try { wasm.open_message(JSON.stringify(ack.session), JSON.stringify(corrupt)); } catch { tampered=true; }
                   if (!tampered) throw new Error('Tampering accepted');
                   // vodozemac pickle round trip: a new instance can continue ratchet.
