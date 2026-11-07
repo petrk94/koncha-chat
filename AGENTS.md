@@ -1,0 +1,34 @@
+# Koncha coding-agent project instructions
+
+Target: clean-room independent implementation of a privacy-first DE/EN/JA private messenger. Our initial build is a **demo, not a secure chat app**.
+
+## Non-negotiables
+
+- Do **not** copy SimpleX (AGPL) source or branding, proprietary assets or snippets. Studying publicly documented architecture is permitted; cite specifications in docs.
+- Do **not** imply production-grade encryption, anonymity, forward secrecy, identity verification or message deletion until independently demonstrated/audited.
+- Do **not** commit keys, real user messages, login tokens, EML samples, PII, credentials, analytics identifiers or any server state. Keep storage outside the webroot.
+- Do **not** add remote translation or AI providers, tracking pixels, ads, phone-book syncing or telephone/email requirements without explicitly approved privacy design.
+- Do **not** invent cryptographic algorithms. For production features, select peer-reviewed protocols and approved compatible libraries after license/security review.
+- Privacy-by-default: no public profiles, no social graph, no friend suggestions, no open contact lookup.
+- Prefer simple PHP 8.2+ and browser-standard JS for current stage; protect source of private server state.
+- New third-party components require inventory and license review in docs/DEPENDENCIES.md.
+- Every feature must have tests and clear limits in docs/SECURITY.md and docs/ARCHITECTURE.md.
+- Treat invite links as secrets, not user identities. Keys must not be included in HTTP paths, query strings, logs, analytics or third-party requests.
+
+## Validate before changes are proposed
+
+```bash
+php -l public/api.php
+npm test
+```
+
+The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simulation, if a local Chromium browser is permitted to reach loopback HTTP by the environment.
+
+## Development order
+
+1. Verify functionality and retention in two distinct devices over HTTPS.
+2. Draft threat model and choose a reviewed E2EE protocol/library; do not deploy real private conversations using prototype encryption.
+3. Add explicit identity verification and resilient local encrypted key store.
+4. Introduce safe contact control/revocation, abuse protections, and deterministic server retention.
+5. Add high-quality JA/EN/DE local translations and contextual kana+kanji readings.
+6. Security review before internet-facing beta.

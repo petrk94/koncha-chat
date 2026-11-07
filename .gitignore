@@ -1,0 +1,9 @@
+/var/rooms/*
+!/var/rooms/.gitkeep
+/.env
+/.env.*
+/.idea/
+/.vscode/
+/node_modules/
+.DS_Store
+*.log
