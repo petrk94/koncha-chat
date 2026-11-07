@@ -1,31 +1,16 @@
 {
   "id": "/",
-  "name": "Koncha – Private Messenger Prototype",
+  "name": "Koncha – Intercultural Private Messenger (Test)",
   "short_name": "Koncha",
-  "description": "A local-first intercultural messenger experiment.",
+  "description": "An experimental local-first intercultural messenger. Not for sensitive data.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#101a26",
-  "theme_color": "#101a26",
+  "background_color": "#0b111b",
+  "theme_color": "#0b111b",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    }
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
   ]
 }

@@ -1,4 +1,4 @@
-// Koncha v0.1 experiment. Not production-grade E2EE. See docs/SECURITY.md.
+// Koncha experiment. Not audited identity-authenticated E2EE. See docs/SECURITY.md.
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const cryptoApi = globalThis.crypto;
@@ -20,21 +20,56 @@ export function randomId(length = 18) {
 export function createRoom() {
   return { roomId: randomId(18), secret: randomId(32) };
 }
+// Legacy #join links are intentionally no longer accepted: they granted permanent access.
 export function parseInvite(hash) {
-  const match = /^#join=([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{43})$/.exec(hash);
+  const match = /^#invite=([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/.exec(hash);
   if (!match) return null;
-  if (b64uDecode(match[1]).length !== 18 || b64uDecode(match[2]).length !== 32) return null;
-  return { roomId: match[1], secret: match[2] };
+  if (b64uDecode(match[1]).length !== 18 || b64uDecode(match[2]).length !== 16 || b64uDecode(match[3]).length !== 32) return null;
+  return { roomId: match[1], inviteId: match[2], token: match[3] };
 }
-export function inviteUrl(base, room) {
+export function createInvite(room) {
+  if (!room?.roomId || !room?.secret) throw new Error('Invalid room');
+  return { roomId: room.roomId, inviteId: randomId(16), token: randomId(32) };
+}
+export function inviteUrl(base, invite) {
   const url = new URL(base);
-  url.hash = `join=${room.roomId}.${room.secret}`;
+  url.hash = `invite=${invite.roomId}.${invite.inviteId}.${invite.token}`;
   return url.href;
+}
+export async function tokenVerifier(token) {
+  const bytes = b64uDecode(token);
+  if (bytes.length !== 32) throw new Error('Invalid invitation token');
+  return b64uEncode(new Uint8Array(await cryptoApi.subtle.digest('SHA-256', bytes)));
+}
+async function inviteKey(invite) {
+  const raw = b64uDecode(invite.token);
+  const salt = b64uDecode(invite.roomId);
+  if (raw.length !== 32 || salt.length !== 18) throw new Error('Invalid invitation');
+  const master = await cryptoApi.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
+  return cryptoApi.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt, info: enc.encode(`Koncha/v2/invite/${invite.inviteId}`) }, master,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+export async function sealInvite(invite, room) {
+  if (invite.roomId !== room.roomId) throw new Error('Wrong room');
+  const iv = cryptoApi.getRandomValues(new Uint8Array(12));
+  const key = await inviteKey(invite);
+  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret })));
+  return { iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(ciphertext)) };
+}
+export async function unsealInvite(invite, payload) {
+  const iv = b64uDecode(payload?.iv || '');
+  if (iv.length !== 12) throw new Error('Invalid invite IV');
+  const key = await inviteKey(invite);
+  const decrypted = await cryptoApi.subtle.decrypt({ name: 'AES-GCM', iv }, key, b64uDecode(payload.ciphertext));
+  const room = JSON.parse(dec.decode(decrypted));
+  if (room.roomId !== invite.roomId || b64uDecode(room.secret).length !== 32) throw new Error('Invalid invite payload');
+  return room;
 }
 export async function deriveRoomKeys(room) {
   const raw = b64uDecode(room.secret);
   const salt = b64uDecode(room.roomId);
-  if (raw.length !== 32 || salt.length !== 18) throw new Error('Invalid invitation');
+  if (raw.length !== 32 || salt.length !== 18) throw new Error('Invalid room');
   const key = await cryptoApi.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey', 'deriveBits']);
   const shared = { name: 'HKDF', hash: 'SHA-256', salt };
   const messageKey = await cryptoApi.subtle.deriveKey(

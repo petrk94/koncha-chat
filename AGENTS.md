@@ -32,3 +32,11 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 4. Introduce safe contact control/revocation, abuse protections, and deterministic server retention.
 5. Add high-quality JA/EN/DE local translations and contextual kana+kanji readings.
 6. Security review before internet-facing beta.
+
+## 0.2 local AI and invitation additions
+
+- The `Translator` API is an on-device **browser capability**; do not replace it with remote LLM requests when missing. See `docs/LOCAL_TRANSLATION.md` for planned WebGPU/WASM fallback.
+- Translations do not alter original message data or get relayed; use explicit opt-in.
+- Do not use non-commercial model licenses in a potentially commercial Koncha release.
+- Invite URLs must not include persistent room secrets. Only the first valid redemption succeeds, within 60 minutes. All expiry/rotation/revoke paths need server tests.
+- Japanese IME text composition must never send messages by pressing Enter to select kanji/kana candidates.

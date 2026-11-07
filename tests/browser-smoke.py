@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#chat').wait_for(state='visible')
             pagea.locator('#shareBtn').click()
             invite = pagea.evaluate('navigator.clipboard.readText()')
-            assert invite.startswith('http://127.0.0.1:18787/#join='), invite
+            assert invite.startswith('http://127.0.0.1:18787/#invite='), invite
             pageb.goto(invite)
             pageb.locator('#pendingInvite').wait_for(state='visible')
             pageb.locator('#joinBtn').click()
@@ -41,10 +41,11 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#messageInput').fill('こんにちは！')
             pagea.locator('#sendBtn').click()
             pageb.locator('.bodytext').filter(has_text='こんにちは！').wait_for(timeout=10000)
+            pageb.locator('#chatHeaderBtn').click()
             pageb.locator('#romajiToggle').check()
             pageb.locator('.romanized').filter(has_text='konnichiha').wait_for(timeout=10000)
             pageb.locator('#messageInput').fill('Hi from another browser')
-            pageb.locator('#sendBtn').click()
+            pageb.locator('#messageInput').press('Enter')
             pagea.locator('.bodytext').filter(has_text='Hi from another browser').wait_for(timeout=10000)
             pagea.screenshot(path='/mnt/data/koncha-chat-preview.png',full_page=True)
             assert pagea.locator('.bubble').count()==2

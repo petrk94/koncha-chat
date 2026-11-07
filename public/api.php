@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// Koncha v0.1: experimental ciphertext relay. NOT production-grade secure messaging.
+// Koncha experimental ciphertext relay. Not production-grade E2EE. See docs/SECURITY.md.
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, max-age=0');
 header('X-Content-Type-Options: nosniff');
@@ -13,12 +13,11 @@ function reply(int $code, array $data): never {
     echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     exit;
 }
-function validRoom(mixed $value): bool {
-    return is_string($value) && preg_match('/^[A-Za-z0-9_-]{24}$/D', $value) === 1;
+function exact(mixed $value, int $length): bool {
+    return is_string($value) && strlen($value) === $length && preg_match('/^[A-Za-z0-9_-]+$/D', $value) === 1;
 }
-function validToken(mixed $value): bool {
-    return is_string($value) && preg_match('/^[A-Za-z0-9_-]{43}$/D', $value) === 1;
-}
+function validRoom(mixed $value): bool { return exact($value, 24); }
+function validToken(mixed $value): bool { return exact($value, 43); }
 function authToken(): ?string {
     $raw = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     if (!is_string($raw) || !str_starts_with($raw, 'Bearer ')) return null;
@@ -39,11 +38,16 @@ function validEnvelope(mixed $value): bool {
     return is_array($value) && ($value['v'] ?? null) === 1
         && is_string($value['id'] ?? null)
         && preg_match('/^[a-f0-9-]{36}$/D', $value['id']) === 1
-        && is_string($value['iv'] ?? null)
-        && preg_match('/^[A-Za-z0-9_-]{16}$/D', $value['iv']) === 1
+        && exact($value['iv'] ?? null, 16)
         && is_string($value['ciphertext'] ?? null)
         && strlen($value['ciphertext']) <= 11000
         && preg_match('/^[A-Za-z0-9_-]{24,11000}$/D', $value['ciphertext']) === 1;
+}
+function validInvitePayload(mixed $value): bool {
+    return is_array($value) && exact($value['iv'] ?? null, 16)
+        && is_string($value['ciphertext'] ?? null)
+        && strlen($value['ciphertext']) <= 1200
+        && preg_match('/^[A-Za-z0-9_-]{32,1200}$/D', $value['ciphertext']) === 1;
 }
 function cleanMessages(array &$state): bool {
     $before = count($state['messages'] ?? []);
@@ -60,21 +64,23 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (!in_array($method, ['GET', 'POST'], true)) reply(405, ['error' => 'Method not allowed']);
 if ($method === 'POST' && !str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) reply(415, ['error' => 'Expected application/json']);
 $action = $_GET['action'] ?? '';
+if (!in_array($action, ['init', 'list', 'send', 'invite_create', 'invite_claim', 'invite_revoke', 'invite_status', 'invite_check'], true)) reply(404, ['error' => 'Unknown action']);
+if (($action === 'list' || $action === 'invite_status') !== ($method === 'GET')) reply(405, ['error' => 'Method not allowed']);
 $body = $method === 'POST' ? postJson() : [];
 $room = $method === 'POST' ? ($body['roomId'] ?? null) : ($_GET['room'] ?? null);
-$token = authToken();
-if (!validRoom($room) || $token === null) reply(400, ['error' => 'Invalid room or authorization']);
-if (!in_array($action, ['init', 'list', 'send'], true)) reply(404, ['error' => 'Unknown action']);
-if (($action === 'init' || $action === 'send') && $method !== 'POST') reply(405, ['error' => 'Method not allowed']);
-if ($action === 'list' && $method !== 'GET') reply(405, ['error' => 'Method not allowed']);
+if (!validRoom($room)) reply(400, ['error' => 'Invalid room']);
+$claim = in_array($action, ['invite_claim', 'invite_check'], true);
+$token = $claim ? null : authToken();
+if (!$claim && $token === null) reply(401, ['error' => 'Missing authorization']);
 if ($action === 'send' && !validEnvelope($body['envelope'] ?? null)) reply(400, ['error' => 'Invalid envelope']);
+if ($action === 'invite_create' && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null) || !validInvitePayload($body['payload'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
+if ($claim && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
 
-// The directory must be OUTSIDE the document root in production.
+// The directory must be OUTSIDE the document root. File locking makes one-time claims atomic.
 $directory = getenv('KONCHA_DATA_DIR') ?: dirname(__DIR__) . '/var/rooms';
 if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) reply(500, ['error' => 'Storage unavailable']);
 $path = rtrim($directory, '/') . '/' . $room . '.json';
-// Do not create empty room files in response to arbitrary read/send requests.
-if ($action !== 'init' && !is_file($path)) reply(404, ['error' => 'Room not found']);
+if ($action !== 'init' && !is_file($path)) reply($claim ? 410 : 404, ['error' => $claim ? 'invite_unavailable' : 'Room not found']);
 $handle = fopen($path, 'c+');
 if (!$handle) reply(500, ['error' => 'Storage unavailable']);
 @chmod($path, 0600);
@@ -83,18 +89,46 @@ try {
     rewind($handle);
     $raw = stream_get_contents($handle);
     $state = ($raw !== false && trim($raw) !== '') ? json_decode($raw, true) : null;
-    if ($state !== null && (!is_array($state) || !isset($state['verifier']))) reply(500, ['error' => 'Invalid room state']);
-    $verifier = hash('sha256', $token);
+    if ($state !== null && (!is_array($state) || !isset($state['verifier']) || !is_string($state['verifier']))) reply(500, ['error' => 'Invalid room state']);
     $modified = false;
     if ($state === null) {
         if ($action !== 'init') reply(404, ['error' => 'Room not found']);
-        $state = ['verifier' => $verifier, 'createdAt' => time(), 'messages' => []];
+        $state = ['verifier' => hash('sha256', $token), 'createdAt' => time(), 'messages' => [], 'invite' => null];
         $modified = true;
-    } elseif (!hash_equals($state['verifier'], $verifier)) {
+    } elseif (!$claim && !hash_equals($state['verifier'], hash('sha256', $token))) {
         reply(403, ['error' => 'Access denied']);
     }
     $modified = cleanMessages($state) || $modified;
-    if ($action === 'send') {
+    if ($claim) {
+        $invite = $state['invite'] ?? null;
+        if (!is_array($invite) || !hash_equals($invite['id'], $body['inviteId'])) reply(410, ['error' => 'invite_unavailable']);
+        if (!hash_equals($invite['verifier'], $body['verifier'])) reply(403, ['error' => 'invite_invalid']);
+        if ($invite['expiresAt'] <= time()) {
+            // Retain a minimal tombstone so the recipient sees "expired", not "unknown".
+            // Never retain the encrypted room secret after an expiry is observed.
+            unset($invite['payload']);
+            $state['invite'] = $invite;
+            rewind($handle);
+            $encoded = json_encode($state, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            if (!ftruncate($handle, 0) || fwrite($handle, $encoded) !== strlen($encoded)) reply(500, ['error' => 'Storage write failed']);
+            fflush($handle);
+            reply(410, ['error' => 'invite_expired']);
+        }
+        if (!isset($invite['payload'])) reply(410, ['error' => 'invite_expired']);
+        if ($action === 'invite_check') reply(200, ['expiresAt' => $invite['expiresAt']]);
+        $payload = $invite['payload'];
+        $state['invite'] = null; // atomic one-time redemption under exclusive lock
+        $modified = true;
+    } elseif ($action === 'invite_create') {
+        $state['invite'] = [
+            'id' => $body['inviteId'], 'verifier' => $body['verifier'],
+            'payload' => $body['payload'], 'expiresAt' => time() + 3600,
+        ];
+        $modified = true;
+    } elseif ($action === 'invite_revoke') {
+        $state['invite'] = null;
+        $modified = true;
+    } elseif ($action === 'send') {
         $envelope = $body['envelope'];
         $exists = false;
         foreach ($state['messages'] as $msg) {
@@ -114,6 +148,9 @@ try {
         if (!ftruncate($handle, 0) || fwrite($handle, $encoded) !== strlen($encoded)) reply(500, ['error' => 'Storage write failed']);
         fflush($handle);
     }
+    if ($action === 'invite_claim') reply(200, ['payload' => $payload]);
+    if ($action === 'invite_create') reply(200, ['expiresAt' => $state['invite']['expiresAt']]);
+    if ($action === 'invite_status') reply(200, ['expiresAt' => (($state['invite']['expiresAt'] ?? 0) > time()) ? $state['invite']['expiresAt'] : null]);
     if ($action === 'list') reply(200, ['messages' => $state['messages']]);
     reply(200, ['ok' => true]);
 } finally {
