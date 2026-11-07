@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#121b2b">
+  <meta name="theme-color" content="#171b1e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="Koncha — local-first multilingual messaging experiment.">
+  <meta name="description" content="Koncha — privater, mehrsprachiger Messenger-Prototyp.">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
-  <title>Koncha — Private Messenger Prototype</title>
+  <title>Koncha — Private Chats</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -19,85 +19,97 @@
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><img src="/icon.svg" width="40" height="40" alt=""><span>koncha<small data-i18n="tagline">Talk your way.</small></span></div>
+    <div class="brand"><img src="/icon.svg" width="30" height="30" alt=""><span>koncha</span><span class="alpha-mark" data-i18n="alphaMark">Alpha · Testversion</span></div>
     <div class="top-actions">
-      <span class="prototype" data-i18n="prototype">EXPERIMENT · NOT SECURE</span>
       <label class="sr-only" for="languageSelect" data-i18n="language">Sprache</label>
-      <select id="languageSelect" class="language-select" aria-label="Language / Sprache / 言語"><option value="de">DE</option><option value="en">EN</option><option value="ja">日本語</option></select>
-      <button class="ghost small" id="resetBtn" type="button" data-i18n="reset">Zurücksetzen</button>
+      <select id="languageSelect" class="language-select" aria-label="Language / Sprache / 言語"><option value="de">Deutsch</option><option value="en">English</option><option value="ja">日本語</option></select>
     </div>
   </header>
-  <main class="main" id="app">
+  <main class="main">
     <section id="onboarding" class="panel narrow" hidden>
-      <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="welcome">Willkommen bei Koncha</span></div>
-      <h1 data-i18n="onboardTitle">Privat sprechen. Sprachen verbinden.</h1>
-      <p class="lead" data-i18n="onboardLead">Ein experimenteller Messenger ohne öffentliche Kontaktsuche, Telefonnummer oder zentrale Benutzerregistrierung.</p>
-      <div class="notice danger"><strong data-i18n="testOnly">Nur für Testnachrichten.</strong> <span data-i18n="notAudited">Keine geprüfte Identitätsbindung, keine Forward Secrecy. Nicht für vertrauliche Nachrichten geeignet.</span></div>
-      <h2 data-i18n="storageTitle">Wo liegen deine Daten?</h2>
-      <div class="facts">
-        <div><strong data-i18n="localTitle">Nur im Browser</strong><span data-i18n="localText">Anzeigename, zufällige Gerätekennung, Raumschlüssel und verschlüsselte lokale Nachrichten in IndexedDB. Löschen von Browserdaten kann alles unwiederbringlich entfernen.</span></div>
-        <div><strong data-i18n="serverTitle">Auf deinem Test-Relay</strong><span data-i18n="serverText">Raum-ID, Authentifizierungsprüfsumme, verschlüsselte Nachrichten und Zeitstempel. Nachrichten werden nach 24 Stunden bei Zugriff bereinigt; Serverlogs und Backups können länger bestehen.</span></div>
-        <div><strong data-i18n="noAccountTitle">Keine zentrale Registrierung</strong><span data-i18n="noAccountText">Keine E-Mail und kein Passwort. Keine Wiederherstellung oder Synchronisierung zwischen Browsern. Jeder Browser ist ein separates Testgerät.</span></div>
-      </div>
-      <label class="field" for="nickname" data-i18n="nicknameLabel">Dein lokaler Anzeigename</label>
-      <input id="nickname" autocomplete="nickname" maxlength="32" data-i18n-placeholder="nicknamePlaceholder" placeholder="z. B. Yuki oder Alex" required>
+      <div class="section-kicker" data-i18n="yourIdentity">Deine Identität</div>
+      <h1 data-i18n="onboardNewTitle">Wie möchtest du heißen?</h1>
+      <p class="lead" data-i18n="identityLead">Dein Name wird beim Einladen angezeigt. Er ist frei wählbar und nicht amtlich verifiziert.</p>
+      <div class="field-row"><label class="field" for="nickname" data-i18n="nicknameLabel">Anzeigename</label>
+        <input id="nickname" autocomplete="nickname" maxlength="32" data-i18n-placeholder="nicknamePlaceholder" placeholder="z. B. Yuki Tanaka" required></div>
+      <div class="field-row"><label class="field" for="handle" data-i18n="handleLabel">Benutzername</label>
+        <div class="handle-field"><span aria-hidden="true">@</span><input id="handle" autocomplete="off" spellcheck="false" maxlength="24" placeholder="yuki.tanaka" required></div>
+        <p class="fineprint" data-i18n="handleHint">Nur auf diesem Gerät gespeichert. Nicht einzigartig oder verifiziert.</p></div>
+      <details class="disclosure"><summary data-i18n="storageTitle">Welche Daten werden gespeichert?</summary>
+        <div class="details-copy"><p data-i18n="localText">Name, Gerätekennung, Raumschlüssel und verschlüsselte Nachrichten liegen in diesem Browser. Beim Löschen der Browserdaten können sie verloren gehen.</p><p data-i18n="serverText">Der Testserver speichert Raumdaten, verschlüsselte Nachrichten und Zeitstempel; Serverlogs können länger bestehen.</p><p data-i18n="noAccountText">Keine E-Mail, kein Passwort, keine Wiederherstellung. Jeder Browser ist ein eigenes Gerät.</p></div>
+      </details>
+      <p class="caution" data-i18n="notAudited">Nicht sicherheitsgeprüft. Keine vertraulichen Nachrichten senden.</p>
       <label class="check"><input id="ack" type="checkbox"><span data-i18n="ack">Ich verstehe die Risiken und die lokale Speicherung dieses Testprototyps.</span></label>
-      <button id="startBtn" class="primary full" type="button" data-i18n="start">Lokale Identität erstellen</button>
+      <button id="startBtn" class="primary full" type="button" data-i18n="start">Weiter</button>
     </section>
 
     <section id="lobby" class="panel narrow" hidden>
-      <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="lobbyEyebrow">Dein privater Raum</span></div>
-      <h1 data-i18n="lobbyTitle">Ein Gespräch beginnt mit Vertrauen.</h1>
-      <p class="lead" data-i18n="lobbyLead">Lade genau eine Person mit einem einmaligen, 60 Minuten gültigen Link ein. Der Link wird nach Verwendung ungültig.</p>
-      <div id="identityCard" class="identity-card"><span data-i18n="deviceIdentity">Lokale Gerätekennung</span><code id="deviceId">–</code></div>
-      <button id="createBtn" class="primary full" type="button" data-i18n="createRoom">Neuen Testraum erstellen</button>
-      <div id="pendingInvite" class="invite-box" hidden>
-        <span class="mini-label" data-i18n="pending">Einladung erkannt</span>
-        <h2 data-i18n="joinTitle">Du wurdest eingeladen.</h2>
-        <p data-i18n="joinHint">Die Einladung ist einmalig. Öffne sie nur, wenn du den Absender kennst.</p>
-        <button id="joinBtn" class="secondary full" type="button" data-i18n="join">Einladung annehmen</button>
+      <div class="section-kicker" data-i18n="newConversation">Koncha</div>
+      <h1 data-i18n="lobbySimpleTitle">Neues Gespräch</h1>
+      <p class="lead" data-i18n="lobbySimpleLead">Erstelle einen privaten Chat und sende einer Person eine Einladung.</p>
+      <div class="local-identity"><div class="identity-avatar" id="lobbyAvatar">こ</div><div><strong id="lobbyAlias"></strong><small id="lobbyHandle"></small></div><span class="local-tag" data-i18n="thisDevice">Dieses Gerät</span></div>
+      <button id="createBtn" class="primary full" type="button" data-i18n="newChat">Neuen Chat beginnen</button>
+      <div id="recentRoom" class="recent-room" hidden><span data-i18n="recentRoomTitle">Letztes Gespräch</span><button id="resumeBtn" class="text-button" type="button" data-i18n="resume">Gespräch fortsetzen</button></div>
+      <p class="fineprint" data-i18n="httpsHint">Für den Test zwischen zwei Geräten brauchst du HTTPS.</p>
+      <button id="lobbyResetBtn" class="muted-link" type="button" data-i18n="reset">Lokale Daten löschen</button>
+    </section>
+
+    <section id="invitation" class="panel narrow invite-page" hidden>
+      <div class="section-kicker" data-i18n="inviteLabel">Persönliche Einladung</div>
+      <h1 data-i18n="invitePageTitle">Du wurdest eingeladen</h1>
+      <div id="inviterCard" class="inviter-card" hidden>
+        <div class="identity-avatar" id="inviterAvatar">こ</div>
+        <div class="inviter-person"><strong id="inviterName"></strong><span id="inviterHandle"></span></div>
+        <span class="inviter-note" data-i18n="unverified">Nicht verifiziert</span>
       </div>
-      <div id="inviteError" class="notice danger" hidden role="alert"></div>
-      <div id="recentRoom" class="invite-box" hidden><h2 data-i18n="recentRoomTitle">Letztes Gespräch</h2><p data-i18n="recentRoomHint">Auf diesem Browser lokal gespeichert.</p><button id="resumeBtn" class="secondary full" type="button" data-i18n="resume">Gespräch fortsetzen</button></div>
-      <p class="helper" data-i18n="httpsHint">Für zwei physische Geräte brauchst du HTTPS. Unter localhost erreichst du nur den lokalen Rechner.</p>
-      <p class="helper" data-i18n="iosHint">iPhone: In Safari Teilen → „Zum Home-Bildschirm“. Android: Browsermenü → „App installieren“ oder „Zum Startbildschirm“.</p>
+      <p id="inviteDescription" class="lead" data-i18n="invitePageLead">Eine Person möchte mit dir chatten.</p>
+      <div class="invite-meta"><span data-i18n="inviteSecurity">Einmaliger Link</span><span id="incomingExpiry"></span></div>
+      <p class="fineprint" data-i18n="inviteIdentityCaution">Der Name stammt aus dem Link und ist kein Identitätsnachweis. Prüfe ihn bei Bedarf über einen anderen Kanal.</p>
+      <div id="inviteError" class="caution" hidden role="alert"></div>
+      <div class="invite-actions"><button id="joinBtn" class="primary" type="button" data-i18n="join">Einladung annehmen</button><button id="rejectInviteBtn" class="ghost" type="button" data-i18n="decline">Ablehnen</button></div>
     </section>
 
     <section id="chat" class="chat-layout" hidden>
       <aside class="sidebar" id="sidebar">
-        <div class="side-brand"><span class="eyebrow" data-i18n="chatEyebrow">Dein Gespräch</span><span class="status-pill"><span class="status-dot"></span><span data-i18n="experimental">Testmodus</span></span></div>
-        <div class="room-avatar">こ</div>
-        <h1 id="chatTitle">Koncha</h1>
-        <p data-i18n="sidebarHint">Einmalige Einladungen. Keine automatische Kontaktsuche. Dies ist noch kein authentifizierter Messenger.</p>
-        <div class="sidebar-actions"><button id="shareBtn" class="primary" type="button" data-i18n="newInvite">Einladung erzeugen</button><button id="leaveBtn" class="ghost" type="button" data-i18n="leave">Zurück</button></div>
-        <div id="inviteStatus" class="invite-status" hidden><span id="inviteCountdown"></span><button id="revokeBtn" type="button" class="ghost small" data-i18n="revoke">Widerrufen</button></div>
-        <div class="notice danger small-notice" data-i18n="roomWarning">Experimentelle Verschlüsselung, keine überprüfte Absenderidentität. Keine Geheimnisse senden.</div>
-        <div class="device-box"><span data-i18n="deviceIdentity">Lokale Gerätekennung</span><code id="chatDeviceId">–</code></div>
+        <div class="sidebar-heading"><strong data-i18n="conversations">Gespräche</strong><button id="leaveBtn" class="icon-control" type="button" data-i18n-title="leave" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5 5 12l7 7M5 12h14"/></svg></button></div>
+        <button id="roomRow" class="room-row" type="button" aria-current="page"><span class="small-avatar" id="sidebarAvatar">こ</span><span class="room-row-body"><strong id="chatTitle">Privater Chat</strong><small id="roomSubtitle" data-i18n="chatSubtitle">Privates Gespräch</small></span><span class="room-dot" aria-hidden="true"></span></button>
+        <div class="sidebar-bottom"><span class="tiny-note" data-i18n="sidebarBottom">Lokal · Experimentell</span></div>
       </aside>
       <div class="conversation">
-        <button id="chatHeaderBtn" type="button" class="conversation-top" aria-expanded="false" aria-controls="chatPreferences">
-          <span class="avatar">こ</span><span class="contact-title"><strong data-i18n="chatName">Privater Testraum</strong><small id="connection" data-i18n="connecting">Verbinde…</small></span><span class="header-gear" aria-hidden="true">⚙</span><span class="sr-only" data-i18n="preferences">Gesprächseinstellungen öffnen</span>
-        </button>
-        <div id="chatPreferences" class="preferences" hidden>
-          <div class="preferences-head"><strong data-i18n="preferencesTitle">Gesprächseinstellungen</strong><button id="closePreferences" class="ghost small" type="button" aria-label="Close">✕</button></div>
-          <label class="check compact"><input type="checkbox" id="romajiToggle"><span data-i18n="romaji">Kana als Romaji anzeigen (ohne Kanji)</span></label>
-          <label class="check compact"><input type="checkbox" id="enterToggle" checked><span data-i18n="enterSend">Enter sendet · Shift+Enter neue Zeile</span></label>
-          <div class="divider"></div>
-          <label class="check compact"><input type="checkbox" id="translationToggle"><span data-i18n="translateToggle">Eingehende Nachrichten lokal übersetzen</span></label>
-          <div class="inline-fields"><label><span data-i18n="sourceLanguage">Originalsprache</span><select id="sourceLanguage"><option value="ja">日本語</option><option value="en">English</option><option value="de">Deutsch</option></select></label><label><span data-i18n="targetLanguage">Übersetzung nach</span><select id="targetLanguage"><option value="de">Deutsch</option><option value="en">English</option><option value="ja">日本語</option></select></label></div>
-          <p id="translationStatus" class="helper" data-i18n="translationHint">Nur bei unterstützten Browsern. Keine Cloud-Übersetzung.</p>
-          <p class="helper" data-i18n="screenshotHint">Screenshots lassen sich im Browser nicht zuverlässig verhindern oder erkennen.</p>
+        <div class="conversation-top">
+          <button id="mobileBackBtn" type="button" class="icon-control mobile-back" aria-label="Zurück"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5 5 12l7 7M5 12h14"/></svg></button>
+          <button id="chatHeaderBtn" type="button" class="contact-button" aria-expanded="false" aria-controls="chatPreferences">
+            <span class="small-avatar" id="headerAvatar">こ</span><span class="contact-title"><strong id="contactName" data-i18n="chatName">Privater Chat</strong><small><span id="contactHandle"></span><span id="connection" data-i18n="connecting">Verbinde…</span></small></span>
+          </button>
+          <button id="settingsBtn" class="icon-control" type="button" aria-controls="chatPreferences" aria-expanded="false" data-i18n-title="preferences" aria-label="Gesprächseinstellungen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="M19.4 15a2 2 0 0 0 .4 2.1l-2 2a2 2 0 0 0-2.1-.4l-1 .5a2 2 0 0 0-1.4 1.8h-2.7a2 2 0 0 0-1.4-1.8l-1-.5a2 2 0 0 0-2.1.4l-2-2a2 2 0 0 0 .4-2.1l-.5-1A2 2 0 0 0 2 12.6V10a2 2 0 0 0 1.8-1.4l.5-1a2 2 0 0 0-.4-2.1l2-2a2 2 0 0 0 2.1.4l1-.5A2 2 0 0 0 10.4 2h2.7a2 2 0 0 0 1.4 1.8l1 .5a2 2 0 0 0 2.1-.4l2 2a2 2 0 0 0-.4 2.1l.5 1A2 2 0 0 0 22 10v2.6a2 2 0 0 0-1.8 1.4l-.8 1Z"/></svg></button>
         </div>
-        <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Messages"><div class="empty-state"><div class="empty-icon">✦</div><strong data-i18n="emptyTitle">Hier beginnt euer Gespräch.</strong><p data-i18n="emptyText">Sende eine Testnachricht oder teile eine einmalige Einladung.</p></div></div>
+        <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Messages"><div class="empty-state"><strong data-i18n="emptyTitle">Hier beginnt euer Gespräch.</strong></div></div>
         <div class="composer-area">
           <div id="emojiPicker" class="emoji-picker" hidden role="group" aria-label="Emoji"><button type="button">😊</button><button type="button">😂</button><button type="button">❤️</button><button type="button">👍</button><button type="button">🙏</button><button type="button">🎉</button><button type="button">🌸</button><button type="button">✨</button><button type="button">🇯🇵</button><button type="button">👋</button></div>
-          <form id="sendForm" class="composer"><button id="emojiBtn" class="emoji-button" type="button" aria-label="Emoji" aria-expanded="false">☺</button><label class="sr-only" for="messageInput" data-i18n="messageLabel">Nachricht</label><textarea id="messageInput" rows="1" maxlength="2000" data-i18n-placeholder="messagePlaceholder" placeholder="Nachricht schreiben…" required></textarea><button id="sendBtn" class="send-button" type="submit" aria-label="Send"><span aria-hidden="true">➤</span><span class="sr-only" data-i18n="send">Senden</span></button></form>
-          <p class="composer-tip" data-i18n="composerTip">Nur Testnachrichten. Keine Cloud-KI. Keine verifizierte Ende-zu-Ende-Sicherheit.</p>
+          <form id="sendForm" class="composer"><button id="emojiBtn" class="emoji-button" type="button" aria-label="Emoji" aria-expanded="false">☺</button><label class="sr-only" for="messageInput" data-i18n="messageLabel">Nachricht</label><textarea id="messageInput" rows="1" maxlength="2000" data-i18n-placeholder="messagePlaceholder" placeholder="Nachricht schreiben…" required></textarea><button id="sendBtn" class="send-button" type="submit" aria-label="Senden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3.5-7.5L4 12Zm7.5.5L20 4"/></svg><span class="sr-only" data-i18n="send">Senden</span></button></form>
         </div>
+      </div>
+      <div id="chatPreferences" class="preferences-layer" hidden>
+        <button id="preferencesBackdrop" class="preferences-backdrop" aria-label="Schließen" type="button"></button>
+        <section class="preferences" role="dialog" aria-modal="true" aria-labelledby="preferencesHeading" tabindex="-1">
+          <div class="preferences-head"><h2 id="preferencesHeading" data-i18n="preferencesTitle">Gesprächseinstellungen</h2><button id="closePreferences" class="icon-control" type="button" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 19 19M19 5 5 19"/></svg></button></div>
+          <div class="setting-group"><h3 data-i18n="inviteSection">Einladung</h3><button id="shareBtn" class="secondary full" type="button" data-i18n="newInvite">Einladungslink erstellen</button>
+            <div id="inviteStatus" class="invite-status" hidden><span id="inviteCountdown"></span><button id="revokeBtn" type="button" class="text-button" data-i18n="revoke">Widerrufen</button></div><p class="fineprint" data-i18n="invitePrivacyHint">Einmalig gültig für 60 Minuten. Neue Links ersetzen die alten.</p></div>
+          <div class="setting-group"><h3 data-i18n="reading">Darstellung</h3><label class="check compact"><input type="checkbox" id="romajiToggle"><span data-i18n="romaji">Kana als Romaji anzeigen (ohne Kanji)</span></label><label class="check compact"><input type="checkbox" id="enterToggle" checked><span data-i18n="enterSend">Enter sendet · Shift+Enter neue Zeile</span></label></div>
+          <div class="setting-group"><h3 data-i18n="alertSettingsTitle">Benachrichtigungen</h3>
+            <label class="check compact"><input type="checkbox" id="soundToggle" checked><span data-i18n="soundSetting">Ton bei neuen Nachrichten im Hintergrund</span></label>
+            <button id="notifyBtn" class="secondary full" type="button" data-i18n="enableNotifications">Systembenachrichtigungen aktivieren</button>
+            <p id="notificationStatus" class="fineprint" data-i18n="notificationsHint">Nur bei geöffnetem Tab. Für Systemhinweise ist deine Freigabe nötig.</p>
+            <p class="fineprint" data-i18n="pushNotYet">Bei vollständig geschlossener App noch keine Push-Zustellung.</p>
+          </div>
+          <div class="setting-group"><h3 data-i18n="translationTitle">Übersetzung</h3><label class="check compact"><input type="checkbox" id="translationToggle"><span data-i18n="translateToggle">Eingehende Nachrichten lokal übersetzen</span></label>
+            <div class="inline-fields"><label><span data-i18n="sourceLanguage">Originalsprache</span><select id="sourceLanguage"><option value="ja">日本語</option><option value="en">English</option><option value="de">Deutsch</option></select></label><label><span data-i18n="targetLanguage">Übersetzung nach</span><select id="targetLanguage"><option value="de">Deutsch</option><option value="en">English</option><option value="ja">日本語</option></select></label></div><p id="translationStatus" class="fineprint" data-i18n="translationHint">Keine Cloud-Übersetzung.</p></div>
+          <div class="setting-group"><details class="disclosure"><summary data-i18n="safetyDetails">Sicherheit und Daten</summary><div class="details-copy"><p data-i18n="roomWarning">Experimentelle Verschlüsselung. Identitäten sind nicht geprüft. Keine Geheimnisse senden.</p><p data-i18n="screenshotHint">Screenshots lassen sich im Browser nicht zuverlässig verhindern oder erkennen.</p><p data-i18n="deviceIdentity">Lokale Gerätekennung</p><code id="chatDeviceId">–</code></div></details></div>
+          <button id="resetBtn" class="muted-link" type="button" data-i18n="reset">Lokale Daten löschen</button>
+        </section>
       </div>
     </section>
   </main>
-  <footer class="footer"><span>Koncha · 0.2 Alpha · Kirpeit Solutions</span><span data-i18n="footer">Experimental · Local-first · No tracking</span></footer>
   <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
 </div>
 </body>

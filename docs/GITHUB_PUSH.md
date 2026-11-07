@@ -1,19 +1,13 @@
-# Publish the prepared 0.2 branch
+# GitHub publishing and source of truth
 
-The bundled folder contains an initialized Git repository with branch `feat/expiring-invites-mobile-i18n`. The GitHub connector could read `petrk94/koncha-chat` but returned `403 Resource not accessible by integration` for branch/issue creation. Do not claim it was pushed.
+Current verified merged version: `main` at Koncha 0.2 (PR #1), as checked 2026-11-07. The feature branch in this package includes both the earlier 0.3 UI/invitation changes and the new 0.4 notifications. The GitHub app integration cannot currently write (HTTP 403), so the local branch is not yet uploaded.
 
-After extracting the ZIP archive, run:
+Do **not** create a new GitHub repository. Use the single permanent working folder `~/Projekte/koncha-chat` and run:
 
 ```bash
-cd koncha-chat
-gh auth status
-git remote -v
-# Existing origin may be absent from the ZIP; only add it if not already configured:
-git remote add origin https://github.com/petrk94/koncha-chat.git
-git push -u origin feat/expiring-invites-mobile-i18n
-gh pr create --repo petrk94/koncha-chat --base main --head feat/expiring-invites-mobile-i18n \
-  --title 'Koncha 0.2: one-time invites, multilingual mobile UI and local translation adapter' \
-  --body 'Adds 60-minute single-use invite handoff, DE/EN/JA locale UI, chat UX, local-only Translator API adapter, tests and WebGPU/WASM implementation plan. Experimental: no audited E2EE or WebGPU inference model yet.'
+./scripts/doctor.sh
+npm test
+bash scripts/publish-pr.sh
 ```
 
-If `origin` already exists, skip `git remote add origin`. Before merging, inspect the diff and run tests locally.
+`git status -sb` is the correct local repository status command. `gh pr status -R petrk94/koncha-chat` is the GitHub PR status command; `gh status` is invalid. Review the PR and merge when ready. Updating GitHub does not automatically deploy to a PHP server.

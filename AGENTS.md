@@ -40,3 +40,19 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - Do not use non-commercial model licenses in a potentially commercial Koncha release.
 - Invite URLs must not include persistent room secrets. Only the first valid redemption succeeds, within 60 minutes. All expiry/rotation/revoke paths need server tests.
 - Japanese IME text composition must never send messages by pressing Enter to select kanji/kana candidates.
+
+## Chat UI and invitation identity (0.3)
+
+- Keep the conversation screen chat-first. Do not permanently render translation, invitation, account or security management above the message log; use the existing accessible settings overlay.
+- Incoming invite URLs must first show a dedicated inviter preview, not a create-room form. Recipient local identity setup comes after explicitly accepting the invitation.
+- An invitation's name and handle are **self-declared, not authenticated**. Never add a verified checkmark or impersonation-resistant claim until a reviewed device-key identity protocol exists.
+- Avoid leaking invite secrets, room keys or plaintext messages to analytics, server logs, remote translation APIs or third-party assets.
+- Preserve localized DE/EN/JA UI, Enter-to-send with Japanese IME guard, compact mobile keyboard-safe composer and the 60-minute one-time invite behavior.
+
+## Notifications (0.4)
+
+- Decrypted chat text and peer identities must never appear in OS notifications, push payloads, favicon/title, logs or badge metadata.
+- The currently implemented notifications only work while a browser tab/PWA remains running. Never claim closed-app background Web Push works; it needs an authenticated subscription and separate server design.
+- Do not prompt for OS notification permission automatically on page load. Ask within a direct user gesture only. Audio is best effort and subject to browser activation/throttling.
+- Preserve `public/sw.js` as a minimal notification-only worker with NO interception/caching of app JS, crypto keys, or messages.
+- Keep the permanent workspace documented in `docs/WORKSPACE.md` and the diagnostics in `scripts/doctor.sh`.

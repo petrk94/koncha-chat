@@ -21,19 +21,32 @@ export function createRoom() {
   return { roomId: randomId(18), secret: randomId(32) };
 }
 // Legacy #join links are intentionally no longer accepted: they granted permanent access.
+// The fragment is not sent in HTTP requests. Names in links are self-declared,
+// not verified identities. The encrypted handoff binds the preview to the claim.
 export function parseInvite(hash) {
-  const match = /^#invite=([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/.exec(hash);
+  if (!hash.startsWith('#invite=')) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  if (params.getAll('invite').length !== 1 || params.getAll('from').length > 1 || params.getAll('handle').length > 1 || [...params.keys()].some(k => !['invite', 'from', 'handle'].includes(k))) return null;
+  const match = /^([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/.exec(params.get('invite') || '');
   if (!match) return null;
   if (b64uDecode(match[1]).length !== 18 || b64uDecode(match[2]).length !== 16 || b64uDecode(match[3]).length !== 32) return null;
-  return { roomId: match[1], inviteId: match[2], token: match[3] };
+  const sender = params.get('from') || '';
+  const handle = params.get('handle') || '';
+  if (sender.length > 32 || handle.length > 24 || /[\u0000-\u001f\u007f]/.test(sender) || (handle && !/^[a-z][a-z0-9._-]{2,23}$/.test(handle))) return null;
+  return { roomId: match[1], inviteId: match[2], token: match[3], sender, handle };
 }
-export function createInvite(room) {
+export function createInvite(room, identity = null) {
   if (!room?.roomId || !room?.secret) throw new Error('Invalid room');
-  return { roomId: room.roomId, inviteId: randomId(16), token: randomId(32) };
+  return { roomId: room.roomId, inviteId: randomId(16), token: randomId(32),
+    sender: String(identity?.alias || '').slice(0, 32), handle: String(identity?.handle || '').slice(0, 24) };
 }
 export function inviteUrl(base, invite) {
   const url = new URL(base);
-  url.hash = `invite=${invite.roomId}.${invite.inviteId}.${invite.token}`;
+  const params = new URLSearchParams();
+  params.set('invite', `${invite.roomId}.${invite.inviteId}.${invite.token}`);
+  if (invite.sender) params.set('from', invite.sender);
+  if (invite.handle) params.set('handle', invite.handle);
+  url.hash = params.toString();
   return url.href;
 }
 export async function tokenVerifier(token) {
@@ -54,7 +67,7 @@ export async function sealInvite(invite, room) {
   if (invite.roomId !== room.roomId) throw new Error('Wrong room');
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
   const key = await inviteKey(invite);
-  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret })));
+  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret, sender: invite.sender || '', handle: invite.handle || '' })));
   return { iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(ciphertext)) };
 }
 export async function unsealInvite(invite, payload) {
@@ -64,7 +77,9 @@ export async function unsealInvite(invite, payload) {
   const decrypted = await cryptoApi.subtle.decrypt({ name: 'AES-GCM', iv }, key, b64uDecode(payload.ciphertext));
   const room = JSON.parse(dec.decode(decrypted));
   if (room.roomId !== invite.roomId || b64uDecode(room.secret).length !== 32) throw new Error('Invalid invite payload');
-  return room;
+  // A modified preview name must never silently become an accepted chat identity.
+  if ((invite.sender || '') !== (room.sender || '') || (invite.handle || '') !== (room.handle || '')) throw new Error('invite_identity_mismatch');
+  return room.sender ? { roomId: room.roomId, secret: room.secret, peer: { alias: room.sender, handle: room.handle || '' } } : { roomId: room.roomId, secret: room.secret };
 }
 export async function deriveRoomKeys(room) {
   const raw = b64uDecode(room.secret);

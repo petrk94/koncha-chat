@@ -15,7 +15,14 @@
 - Per-room display/translation controls. Browser-native on-device translation adapter where available; WebGPU/WASM worker fallback not yet packaged.
 - Explicit documentation that screenshot protection, central accounts, recovery, verifiable identity and production security are absent.
 
-## 0.3 — serious security design [not yet implemented]
+## 0.3-alpha — personal invitations and calm chat UI [implemented / automated tests passed; real-device verification pending]
+
+- Standalone invite preview before local identity creation; accepting enters onboarding only when necessary.
+- Self-declared display name and local username shown on invitation, encrypted handoff mismatch detection, preservation of previous invite links, no server-side plaintext name logging by this feature.
+- Compact conversation list, messages as central focus, optional settings overlay, reduced persistent warnings. Screenshots of static desktop/mobile/invite layouts reviewed; a full functional browser run in this environment is blocked by sandbox policy.
+- No real identity proof, unique handles, public account directory or screenshot prevention.
+
+## 0.4 — serious security design [not yet implemented]
 
 - Written threat model (honest participants, dishonest peers, malicious relay, compromised client, spammer).
 - Authenticated device identities and out-of-band key/fingerprint verification.
@@ -23,21 +30,27 @@
 - Independent consultation/review for use of library/protocol and license compatibility.
 - Tests for replay, corrupted messages, race/reordering, persistence and key rotation.
 
-## 0.4 — privacy controls [not yet implemented]
+## 0.5 — privacy controls [not yet implemented]
 
 - Revocable invitations are prototyped; add per-contact permission/reachability, explicit blocking/abuse handling.
 - No implied social graph; independent pseudonyms for each relationship.
 - Deterministic server retention, request limits, recovery and backup policy.
 
-## 0.5 — inter-cultural layer [partially prototyped]
+## 0.6 — inter-cultural layer [partially prototyped]
 
 - DE/EN/JA UI localization is prototyped; improve accessibility and Japanese copy review.
 - Kana-to-romaji is prototyped. Add kanji reading/furigana and license-reviewed, self-hosted WebGPU/WASM browser model fallback (especially iPhone Safari).
 - No cloud translation fallback. A future cloud mode would require an entirely separate explicit privacy/product decision.
 - Politeness and cultural context notes clearly labeled as suggestions, not facts.
 
-## 0.6 — test beta [not yet implemented]
+## 0.7 — test beta [not yet implemented]
 
 - Device testing on Android and iOS using HTTPS and PWA installation.
 - OS storage eviction, background behavior and notification design.
 - Security review, release/versioning, privacy law and license review.
+
+## 0.4 follow-up: Web Push for CLOSED PWA [not implemented]
+
+- v0.4 open-tab alerts (sound, favicon/title count, app badge, optional generic OS notice) implemented and tested.
+- For closed-app notifications: define subscriptions and authenticated device binding; implement service-worker `push` event and server-side VAPID Web Push; include unsubscribe, multi-device, expiration, rate limits and traffic-analysis mitigation.
+- Web Push payload must not contain decrypted chat content, peer identity or message keys. Review metadata/privacy impact and test on real iOS Home Screen PWA and Android installed PWA.

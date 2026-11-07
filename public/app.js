@@ -6,10 +6,12 @@ import { romanizeKana } from './romanize.js';
 import { getSetting, putSetting, putMessage, getMessages, resetAll } from './db.js';
 import { applyLanguage, translate } from './i18n.js';
 import { browserTranslation } from './translation.js';
+import { AttentionController } from './notifications.js';
 
 const $ = id => document.getElementById(id);
-const sections = ['onboarding', 'lobby', 'chat'];
+const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
 let pendingInvite = parseInvite(location.hash);
+const malformedInvite = location.hash.startsWith('#invite=') && !pendingInvite;
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 let locale = 'de';
 let identity = null;
@@ -19,6 +21,8 @@ let pollTimer = null;
 let inviteTimer = null;
 let pendingTimer = null;
 let activeInvite = null;
+let invitationAccepted = false;
+let incomingExpiresAt = 0;
 let polling = false;
 let currentMessages = [];
 let lastErrorShown = false;
@@ -26,8 +30,61 @@ let translateSession = null;
 let translationGeneration = 0;
 const translationCache = new Map();
 const t = name => translate(name, locale);
+const attention = new AttentionController({ labels: () => ({ title: t('notificationTitle'), body: t('notificationBody') }) });
+let pollIsInitialized = false;
 
-function screen(id) { sections.forEach(s => { $(s).hidden = s !== id; }); }
+function screen(id) {
+  sections.forEach(s => { $(s).hidden = s !== id; });
+  closePreferences();
+}
+function avatarFor(name) { return [...String(name || 'こ').trim()][0] || 'こ'; }
+function showIdentity() {
+  $('lobbyAlias').textContent = identity.alias;
+  $('lobbyHandle').textContent = '@' + identity.handle;
+  $('lobbyAvatar').textContent = avatarFor(identity.alias);
+}
+function updateConversation() {
+  const peer = room?.peer;
+  const label = peer?.alias || t('chatName');
+  for (const id of ['chatTitle', 'contactName']) $(id).textContent = label;
+  for (const id of ['sidebarAvatar', 'headerAvatar']) $(id).textContent = avatarFor(peer?.alias);
+  $('contactHandle').textContent = peer?.handle ? '@' + peer.handle : '';
+  $('roomSubtitle').textContent = peer?.handle ? '@' + peer.handle : t('chatSubtitle');
+}
+function showInvitation() {
+  clearInterval(pendingTimer); pendingTimer = null;
+  $('inviteError').hidden = true;
+  $('joinBtn').hidden = !pendingInvite;
+  $('inviterCard').hidden = !pendingInvite?.sender;
+  $('inviterName').textContent = pendingInvite?.sender || '';
+  $('inviterHandle').textContent = pendingInvite?.handle ? '@' + pendingInvite.handle : '';
+  $('inviterAvatar').textContent = avatarFor(pendingInvite?.sender);
+  $('inviteDescription').textContent = pendingInvite?.sender ? t('inviteFromDescription') : t('invitePageLead');
+  $('incomingExpiry').textContent = t('checkingInvite');
+  screen('invitation');
+  if (malformedInvite && !pendingInvite) return inviteProblem(new Error('invalid_invitation'));
+  if (pendingInvite) {
+    void checkPendingInvite();
+    pendingTimer = setInterval(() => { void checkPendingInvite(); }, 15000);
+  }
+}
+function closePreferences() {
+  const layer = $('chatPreferences');
+  if (!layer) return;
+  const wasOpen = !layer.hidden;
+  layer.hidden = true;
+  $('chatHeaderBtn').setAttribute('aria-expanded', 'false');
+  $('settingsBtn').setAttribute('aria-expanded', 'false');
+  if (wasOpen) $('settingsBtn').focus();
+}
+function togglePreferences() {
+  const layer = $('chatPreferences');
+  if (!layer.hidden) return closePreferences();
+  layer.hidden = false;
+  $('chatHeaderBtn').setAttribute('aria-expanded', 'true');
+  $('settingsBtn').setAttribute('aria-expanded', 'true');
+  layer.querySelector('.preferences').focus();
+}
 function toast(message) {
   const el = $('toast'); el.textContent = message; el.hidden = false;
   setTimeout(() => { if (el.textContent === message) el.hidden = true; }, 5000);
@@ -36,7 +93,8 @@ function setLanguage(lang) {
   locale = ['de', 'en', 'ja'].includes(lang) ? lang : 'en';
   $('languageSelect').value = locale;
   applyLanguage(document, locale);
-  if (room) { $('connection').textContent = t('connected'); void renderMessages(); }
+  if (room) { $('connection').textContent = t('connected'); updateConversation(); void renderMessages(); }
+  if (pendingInvite && !$('invitation').hidden) $('inviteDescription').textContent = pendingInvite.sender ? t('inviteFromDescription') : t('invitePageLead');
 }
 function preferredLanguage() {
   for (const item of navigator.languages || [navigator.language]) {
@@ -65,27 +123,30 @@ async function api(action, { method = 'GET', body = {}, authenticated = true } =
 }
 function inviteProblem(error) {
   const message = error.message === 'invite_expired' ? t('inviteExpired')
-    : error.message === 'invite_unavailable' ? t('inviteUnavailable') : t('inviteInvalid');
+    : error.message === 'invite_unavailable' ? t('inviteUnavailable')
+    : error.message === 'invite_identity_mismatch' ? t('identityMismatch') : t('inviteInvalid');
   $('inviteError').textContent = message;
   $('inviteError').hidden = false;
-  $('pendingInvite').hidden = true;
+  $('joinBtn').hidden = true;
+  $('incomingExpiry').textContent = t('inviteInactive');
+  $('inviterCard').hidden = true;
+  clearInterval(pendingTimer); pendingTimer = null;
   pendingInvite = null;
+  invitationAccepted = false;
+  screen('invitation');
 }
 function showLobby() {
+  attention.clear();
+  pollIsInitialized = false;
   clearInterval(pollTimer); pollTimer = null;
   clearInterval(inviteTimer); inviteTimer = null;
   clearInterval(pendingTimer); pendingTimer = null;
   room = null; keys = null; activeInvite = null;
+  invitationAccepted = false;
   $('inviteStatus').hidden = true;
-  $('pendingInvite').hidden = !pendingInvite;
-  $('inviteError').hidden = true;
-  $('deviceId').textContent = identity ? identity.id.slice(0, 12) + '…' : '—';
+  showIdentity();
   screen('lobby');
   getSetting('lastRoom').then(saved => { $('recentRoom').hidden = !saved; }).catch(() => {});
-  if (pendingInvite) {
-    void checkPendingInvite();
-    pendingTimer = setInterval(() => { void checkPendingInvite(); }, 15000);
-  }
 }
 async function checkPendingInvite() {
   const invite = pendingInvite;
@@ -93,14 +154,36 @@ async function checkPendingInvite() {
   try {
     const result = await api('invite_check', { method: 'POST', authenticated: false,
       body: { roomId: invite.roomId, inviteId: invite.inviteId, verifier: await tokenVerifier(invite.token) } });
-    if (pendingInvite === invite && result.expiresAt <= Date.now() / 1000) inviteProblem(new Error('invite_expired'));
+    if (pendingInvite !== invite) return;
+    incomingExpiresAt = result.expiresAt;
+    if (incomingExpiresAt <= Date.now() / 1000) return inviteProblem(new Error('invite_expired'));
+    const minutes = Math.max(1, Math.ceil((incomingExpiresAt - Date.now() / 1000) / 60));
+    $('incomingExpiry').textContent = t('inviteMinutes').replace('{minutes}', String(minutes));
   } catch (error) { if (pendingInvite === invite) inviteProblem(error); }
+}
+async function claimPendingInvite() {
+  if (!pendingInvite || !identity) return;
+  $('joinBtn').disabled = true;
+  try {
+    const inv = pendingInvite;
+    // Preflight again after a potentially long identity setup.
+    await checkPendingInvite();
+    if (pendingInvite !== inv) return;
+    const result = await api('invite_claim', { method: 'POST', authenticated: false,
+      body: { roomId: inv.roomId, inviteId: inv.inviteId, verifier: await tokenVerifier(inv.token) } });
+    const claimedRoom = await unsealInvite(inv, result.payload);
+    pendingInvite = null; invitationAccepted = false;
+    await openRoom(claimedRoom);
+  } catch (error) { inviteProblem(error); }
+  finally { $('joinBtn').disabled = false; }
 }
 async function openRoom(next) {
   if (!next?.roomId || !next?.secret) throw new Error('Invalid room');
   clearInterval(pollTimer);
   clearInterval(inviteTimer);
   clearInterval(pendingTimer); pendingTimer = null;
+  attention.clear();
+  pollIsInitialized = false;
   room = next;
   keys = await deriveRoomKeys(room);
   await api('init', { method: 'POST' });
@@ -108,7 +191,7 @@ async function openRoom(next) {
   lastErrorShown = false;
   activeInvite = null;
   currentMessages = await getMessages(room.roomId);
-  $('chatTitle').textContent = `#${room.roomId.slice(0, 8)}`;
+  updateConversation();
   $('connection').textContent = t('connecting');
   $('chatDeviceId').textContent = identity.id.slice(0, 12) + '…';
   $('inviteStatus').hidden = true;
@@ -125,10 +208,12 @@ async function poll() {
     const received = await api('list');
     const known = new Set(currentMessages.map(m => m.id));
     let changed = false;
+    let newFromOthers = 0;
     for (const envelope of received.messages || []) {
       if (known.has(envelope.id)) continue;
       try {
-        await decryptPayload(keys.messageKey, envelope);
+        const message = await decryptPayload(keys.messageKey, envelope);
+        if (message.senderId !== identity.id) newFromOthers++;
         await putMessage(room.roomId, envelope);
         currentMessages.push(envelope);
         known.add(envelope.id);
@@ -136,6 +221,9 @@ async function poll() {
       } catch { /* Ignore unauthenticated ciphertext. */ }
     }
     if (changed) await renderMessages();
+    // Initial sync may contain old messages. Only alert for later arrivals.
+    if (pollIsInitialized && newFromOthers > 0) attention.incoming(newFromOthers);
+    pollIsInitialized = true;
     $('connection').textContent = t('connected');
     lastErrorShown = false;
   } catch (error) {
@@ -156,6 +244,12 @@ async function renderMessages() {
   }
   if (generation !== translationGeneration) return;
   displayed.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+  const correspondent = [...displayed].reverse().find(m => m.senderId !== identity.id);
+  if (correspondent && (!room.peer || room.peer.alias !== correspondent.sender || (correspondent.senderHandle && room.peer.handle !== correspondent.senderHandle))) {
+    room.peer = { alias: correspondent.sender.slice(0, 32), handle: String(correspondent.senderHandle || '').slice(0, 24) };
+    updateConversation();
+    void putSetting('lastRoom', room);
+  }
   if (!displayed.length) {
     const empty = document.createElement('div'); empty.className = 'empty-state';
     const title = document.createElement('strong'); title.textContent = t('emptyTitle');
@@ -206,7 +300,7 @@ function updateInviteCountdown() {
   $('inviteCountdown').textContent = `${t('inviteExpires')}: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 async function makeInvite() {
-  const inv = createInvite(room);
+  const inv = createInvite(room, identity);
   const [verifier, payload] = await Promise.all([tokenVerifier(inv.token), sealInvite(inv, room)]);
   const result = await api('invite_create', { method: 'POST', body: { inviteId: inv.inviteId, verifier, payload } });
   activeInvite = { expiresAt: result.expiresAt };
@@ -260,14 +354,31 @@ async function enableTranslation() {
   }
 }
 
+// One-time user activation permits Web Audio on supporting browsers.
+// Background browsers may still suspend audio despite this action.
+document.addEventListener('pointerdown', () => attention.unlockAudio(), { once: true, capture: true });
+document.addEventListener('keydown', () => attention.unlockAudio(), { once: true, capture: true });
+$('soundToggle').addEventListener('change', async () => {
+  attention.setSound($('soundToggle').checked);
+  if ($('soundToggle').checked) attention.unlockAudio();
+  await putSetting('alertSound', $('soundToggle').checked);
+});
+$('notifyBtn').addEventListener('click', async () => {
+  const status = await attention.requestPermission();
+  $('notificationStatus').textContent = t(status === 'granted' ? 'notificationsReady' : status === 'denied' ? 'notificationsDenied' : 'notificationsUnavailable');
+});
 $('languageSelect').addEventListener('change', async () => { setLanguage($('languageSelect').value); await putSetting('locale', locale); });
 $('startBtn').addEventListener('click', async () => {
   const alias = $('nickname').value.trim();
   if (!alias) return toast(t('invalidName'));
   if (!$('ack').checked) return toast(t('confirmAck'));
   try {
-    identity = { id: randomId(16), alias: alias.slice(0, 32) };
-    await putSetting('consent', true); await putSetting('identity', identity); showLobby();
+    const handle = $('handle').value.trim().toLowerCase().replace(/^@/, '');
+    if (!/^[a-z][a-z0-9._-]{2,23}$/.test(handle)) return toast(t('invalidHandle'));
+    identity = { id: randomId(16), alias: alias.slice(0, 32), handle };
+    await putSetting('consent', true); await putSetting('identity', identity);
+    if (invitationAccepted && pendingInvite) await claimPendingInvite();
+    else showLobby();
   } catch (error) { toast(`${t('localError')}: ${error.message}`); }
 });
 $('createBtn').addEventListener('click', async () => {
@@ -275,17 +386,20 @@ $('createBtn').addEventListener('click', async () => {
 });
 $('joinBtn').addEventListener('click', async () => {
   if (!pendingInvite) return;
-  $('joinBtn').disabled = true;
-  try {
-    const inv = pendingInvite;
-    const result = await api('invite_claim', { method: 'POST', authenticated: false,
-      body: { roomId: inv.roomId, inviteId: inv.inviteId, verifier: await tokenVerifier(inv.token) } });
-    const claimedRoom = await unsealInvite(inv, result.payload);
-    pendingInvite = null;
-    await openRoom(claimedRoom);
-  } catch (error) { inviteProblem(error); }
-  finally { $('joinBtn').disabled = false; }
+  invitationAccepted = true;
+  if (!identity) {
+    $('onboarding').querySelector('h1').textContent = t('onboardInvitedTitle');
+    screen('onboarding');
+    $('nickname').focus();
+  } else await claimPendingInvite();
 });
+$('rejectInviteBtn').addEventListener('click', () => {
+  pendingInvite = null; invitationAccepted = false;
+  if (identity) showLobby(); else screen('onboarding');
+});
+$('lobbyResetBtn').addEventListener('click', () => $('resetBtn').click());
+$('mobileBackBtn').addEventListener('click', showLobby);
+$('roomRow').addEventListener('click', () => closePreferences());
 $('resumeBtn').addEventListener('click', async () => {
   try { const previous = await getSetting('lastRoom'); if (previous) await openRoom(previous); }
   catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
@@ -303,13 +417,12 @@ $('revokeBtn').addEventListener('click', async () => {
   } catch (error) { toast(`${t('revokeError')}: ${error.message}`); }
 });
 $('leaveBtn').addEventListener('click', showLobby);
-$('chatHeaderBtn').addEventListener('click', () => {
-  const next = $('chatPreferences').hidden;
-  $('chatPreferences').hidden = !next;
-  $('chatHeaderBtn').setAttribute('aria-expanded', String(next));
-});
-$('closePreferences').addEventListener('click', () => {
-  $('chatPreferences').hidden = true; $('chatHeaderBtn').setAttribute('aria-expanded', 'false');
+$('chatHeaderBtn').addEventListener('click', togglePreferences);
+$('settingsBtn').addEventListener('click', togglePreferences);
+$('closePreferences').addEventListener('click', closePreferences);
+$('preferencesBackdrop').addEventListener('click', closePreferences);
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('chatPreferences').hidden) closePreferences();
 });
 $('romajiToggle').addEventListener('change', () => { void saveChatPreferences(); void renderMessages(); });
 $('enterToggle').addEventListener('change', () => { void saveChatPreferences(); });
@@ -342,7 +455,7 @@ $('sendForm').addEventListener('submit', async event => {
   if (!room || !keys || !text) return;
   $('sendBtn').disabled = true;
   try {
-    const envelope = await encryptPayload(keys.messageKey, { text, sender: identity.alias, senderId: identity.id, ts: Date.now() });
+    const envelope = await encryptPayload(keys.messageKey, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now() });
     await api('send', { method: 'POST', body: { envelope } });
     await putMessage(room.roomId, envelope);
     currentMessages.push(envelope); field.value = '';
@@ -353,6 +466,7 @@ $('sendForm').addEventListener('submit', async event => {
 $('resetBtn').addEventListener('click', async () => {
   if (!confirm(t('resetConfirm'))) return;
   clearInterval(pollTimer); clearInterval(inviteTimer); clearInterval(pendingTimer);
+  attention.clear();
   translateSession?.dispose();
   try { await resetAll(); location.replace(location.pathname); }
   catch (error) { toast(`${t('resetError')}: ${error.message}`); }
@@ -361,11 +475,27 @@ $('resetBtn').addEventListener('click', async () => {
 (async () => {
   try {
     if (!globalThis.crypto?.subtle || !globalThis.indexedDB) throw new Error(t('unsupported'));
-    const [consent, existing, savedLocale] = await Promise.all([
-      getSetting('consent'), getSetting('identity'), getSetting('locale')
+    const [consent, existing, savedLocale, soundSetting] = await Promise.all([
+      getSetting('consent'), getSetting('identity'), getSetting('locale'), getSetting('alertSound')
     ]);
+    $('soundToggle').checked = soundSetting !== false;
+    attention.setSound($('soundToggle').checked);
     setLanguage(savedLocale || preferredLanguage());
-    if (consent && existing?.id && existing?.alias) { identity = existing; showLobby(); }
+    if (consent && existing?.id && existing?.alias) {
+      identity = existing;
+      if (!identity.handle) {
+        identity.handle = `user${identity.id.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/g, '0')}`;
+        await putSetting('identity', identity);
+      }
+    }
+    if (pendingInvite || malformedInvite) showInvitation();
+    else if (identity && new URLSearchParams(location.search).has('resume')) {
+      const previous = await getSetting('lastRoom');
+      history.replaceState(null, '', location.pathname);
+      if (previous) { try { await openRoom(previous); } catch { showLobby(); } }
+      else showLobby();
+    }
+    else if (identity) showLobby();
     else screen('onboarding');
   } catch (error) { screen('onboarding'); $('startBtn').disabled = true; toast(`${t('unsupported')}: ${error.message}`); }
 })();
