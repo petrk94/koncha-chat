@@ -19,7 +19,7 @@ import {
   receiveSecureEnvelope, sendSecureMessage, retrySecureOutbox,
   visibleSecureMessages, ownSecureFingerprint, localOlmFingerprint
 } from './olm-transport.js';
-import { readOlmState, getOlmHistory } from './olm-store.js';
+import { readOlmState, getOlmHistory, getOlmKnownIds } from './olm-store.js';
 
 const $ = id => document.getElementById(id);
 const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
@@ -549,23 +549,32 @@ async function pollOtherRooms() {
       if (room?.roomId === chatRoom.roomId) continue;
       try {
         const chatKeys = await deriveRoomKeys(chatRoom);
+        if(isOlmRoom(chatRoom))await flushSecure(chatRoom,chatKeys);
         const [remote, cached] = await Promise.all([
-          api('list', { contextRoom: chatRoom, contextKeys: chatKeys }), getMessages(chatRoom.roomId)
+          api('list', { contextRoom: chatRoom, contextKeys: chatKeys }),
+          isOlmRoom(chatRoom) ? getOlmKnownIds(chatRoom.roomId) : getMessages(chatRoom.roomId)
         ]);
-        const known = new Set(cached.map(e => e.id));
+        const known = new Set(cached.map(e => typeof e==='string'?e:e.id));
         let incomingCount = 0;
         for (const envelope of remote.messages || []) {
           if (known.has(envelope.id)) continue;
           try {
-            const msg = await checkedMessage(chatRoom, chatKeys, envelope);
-            const stored = msg.signature
-              ? await putVerifiedMessage(chatRoom.roomId, envelope, msg.senderId, msg.nonce)
-              : (await putMessage(chatRoom.roomId, envelope), true);
-            if (!stored) continue;
+            if(isOlmRoom(chatRoom)){
+              const result=await acceptIncomingSecure(chatRoom,envelope);
+              if(!result.fresh)continue;
+              if(result.type==='chat'&&result.payload.senderId!==identity.id)incomingCount++;
+            }else{
+              const msg=await checkedMessage(chatRoom,chatKeys,envelope);
+              const stored=msg.signature
+                ? await putVerifiedMessage(chatRoom.roomId,envelope,msg.senderId,msg.nonce)
+                : (await putMessage(chatRoom.roomId,envelope),true);
+              if(!stored)continue;
+              if(msg.senderId!==identity.id)incomingCount++;
+            }
             known.add(envelope.id);
-            if (msg.senderId !== identity.id) incomingCount++;
-          } catch { /* Invalid signatures, ciphertext or rotated keys are discarded. */ }
+          } catch { /* Wrong keys, stale ciphertext and downgrades are rejected. */ }
         }
+        if(isOlmRoom(chatRoom))await flushSecure(chatRoom,chatKeys);
         if (roomPrimed.has(chatRoom.roomId) && incomingCount > 0) {
           unreadByRoom.set(chatRoom.roomId, (unreadByRoom.get(chatRoom.roomId) || 0) + incomingCount);
           attention.incoming(incomingCount);
@@ -740,12 +749,25 @@ $('sendForm').addEventListener('submit', async event => {
   if (!room || !keys || !text) return;
   $('sendBtn').disabled = true;
   try {
-    const signed = await signChatPayload(deviceKeyPair, room.roomId, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now(), nonce: randomId(16), presenceId: room.presenceId });
-    const envelope = await encryptPayload(keys.messageKey, signed);
-    await api('send', { method: 'POST', body: { envelope, senderPresenceId: room.presenceId } });
-    await putVerifiedMessage(room.roomId, envelope, identity.id, signed.nonce);
-    currentMessages.push(envelope); field.value = '';
-    await renderMessages();
+    if(isOlmRoom(room)){
+      // Ratchet and ciphertext are already committed in IndexedDB before any
+      // network request. A failed send is retried with EXACT same envelope.
+      const sent=await sendSecureMessage(room,identity,text);
+      currentMessages.push(sent.envelope);field.value='';
+      await renderMessages();
+      try { await flushSecure(room,keys); }
+      catch { toast(t('offline')+' — encrypted message queued locally'); }
+    }else{
+      // Existing pre-0.8 rooms remain READABLE but explicitly legacy.
+      const signed=await signChatPayload(deviceKeyPair,room.roomId,{text,sender:identity.alias,
+        senderHandle:identity.handle,senderId:identity.id,ts:Date.now(),
+        nonce:randomId(16),presenceId:room.presenceId});
+      const envelope=await encryptPayload(keys.messageKey,signed);
+      await api('send',{method:'POST',body:{envelope,senderPresenceId:room.presenceId}});
+      await putVerifiedMessage(room.roomId,envelope,identity.id,signed.nonce);
+      currentMessages.push(envelope);field.value='';
+      await renderMessages();
+    }
   } catch (error) { toast(`${t('sendError')}: ${error.message}`); }
   finally { $('sendBtn').disabled = false; field.focus(); }
 });
