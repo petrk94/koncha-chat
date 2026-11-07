@@ -67,3 +67,9 @@ If SSH is not configured, use `https://github.com/petrk94/koncha-chat.git` with 
 The original code currently carries an **all-rights-reserved** notice pending a deliberate licensing decision. Do not assume that a public GitHub repository automatically grants a permissive license. The project references published SimpleX specs without copying SimpleX code or protected app assets. See [LICENSE.md](LICENSE.md) and [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 For a later visibility change: GitHub repository → Settings → General → Danger Zone → Change repository visibility. The connected ChatGPT GitHub app cannot perform this administrative action.
+
+## Repository nach GitHub veröffentlichen
+
+Der Quellcode liegt bereits mit initialem Commit im Git-Repository. Das mitgelieferte Skript `publish-github.sh` erstellt **explizit ein öffentliches** GitHub-Repository unter `petrk94/koncha-chat` und pusht den aktuellen Commit. Dazu wird auf deinem Rechner `gh` benötigt (Ubuntu/Zorin: `sudo apt install gh`). Einmalig bei GitHub anmelden; danach im entpackten Projekt `./publish-github.sh` ausführen. Es werden weder Zugangsdaten noch Chat-Nachrichten ins Repository eingecheckt. Das Skript bricht bei uncommitteten Änderungen oder einem vorhandenen Ziel-Repository ab.
+
+Wichtiger Hinweis: Ein einmal öffentlich gemachtes Repository kann auch nach späterer Umstellung auf privat bereits kopiert worden sein. Noch ist **keine Produktionssicherheit** gegeben.
