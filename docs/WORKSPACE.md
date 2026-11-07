@@ -6,7 +6,7 @@
 - Git's repository root is **not** the PHP `public/` directory; use `git rev-parse --show-toplevel`.
 - Recommended permanent local folder: `~/Projekte/koncha-chat`. Avoid working from versioned ZIP extraction folders in `~/Downloads/`.
 - `main` is only the latest **merged** version. Feature branches are work in progress until merged.
-- PR #3 merged Koncha 0.5 into main. Koncha 0.6 is developed in branch `feat/local-ai-pwa-security-migration`; do not assume it is merged until verified on GitHub.
+- PR #5 merged Koncha 0.7 into `main` on 7 November 2026; for future changes always verify the current repository head rather than trusting this dated note.
 - The original `~/Downloads/koncha-chat-github-ready/koncha-chat` is the older scaffold (before v0.2) unless you explicitly run `git fetch` and switch branches. It must not be mistaken for the latest source.
 
 ## Important commands
@@ -38,7 +38,7 @@ If you have modified tracked files, inspect `git status` first and commit/stash 
 | `public/app.js` | Application state, chat and polling | yes |
 | `public/i18n.js` | German, English and Japanese UI copy | yes |
 | `public/notifications.js` | Hidden-tab sound, unread favicon and application badges | yes |
-| `public/sw.js` | Service worker for click-to-open system notifications; **not** Web Push | yes |
+| `public/sw.js` | Offline app shell and opt-in generic Web Push notification handler | yes |
 | `public/crypto.js` | Experimental encryption and invitation helper functions | yes |
 | `public/db.js` | Client-side IndexedDB settings and encrypted cache | yes |
 | `public/api.php` | PHP ciphertext relay and invitation state | yes |
@@ -54,15 +54,17 @@ If you have modified tracked files, inspect `git status` first and commit/stash 
 - Hidden **open tab**: polls every ~2.8s (subject to browser background throttling); encrypted incoming messages are decrypted locally. Newly received peer messages raise the unread count in the page title and favicon, optional short audio and app icon badge, plus a generic OS notification **only when permission has been explicitly granted**.
 - Visible chat: clear unread count and app badge.
 - Audio: Web Audio must first be unlocked by a user gesture. Browsers may suspend background audio.
-- Web system notification: service worker is registered after explicit permission. On mobile, a running tab/PWA is needed. OS notification contains neither sender name nor message text.
-- **Fully closed browser/PWA**: no delivery or notifications; no Push API subscription, server-side VAPID push or background delivery yet. iOS requires a Home Screen app for Web Push.
+- Foreground/background-tab system notice: while a chat tab is running, browser notifications require explicit permission and never include sender name or message text. Closed-PWA Push is a separate opt-in feature described below.
+- **Fully closed PWA**: optional Web Push support was added in 0.7 using an empty payload and VAPID, but requires HTTPS, permission, PHP cURL, server-side keys and a compatible push service. Delivery has NOT been verified on physical iOS/Android devices. On iOS, use a Home Screen app.
 - Privacy: no chat text is included in system notifications, icon badges or server push endpoints. No notification API is called with a decrypted message.
 
 ## Version progression
 
 - v0.2.0-alpha.1 merged as PR #1 on 2026-11-07.
 - v0.3 UI and v0.4 notifications merged together as PR #2 on 2026-11-07.
-- v0.5.0-alpha.1 device identities, multiple rooms, presence and offline mailbox are in a new feature branch until PR merge.
+- v0.5.0-alpha.1 device identities, multiple rooms, presence and offline mailbox merged as PR #3 on 2026-11-07.
+- v0.6.0-alpha.1 offline shell and local model worker scaffolding merged as PR #4 on 2026-11-07.
+- v0.7.0-alpha.1 optional Web Push and AI integrity tests merged as PR #5 on 2026-11-07.
 
 Always confirm GitHub status before claiming any new merge or deployed release.
 

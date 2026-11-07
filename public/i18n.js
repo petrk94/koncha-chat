@@ -154,9 +154,9 @@ Object.assign(dictionary.ja, {
   inviteAlreadyJoined:'この部屋には既に相手がいます。別の相手には新しいチャットを作成してください。'
 });
 
-Object.assign(dictionary.de, {pwaDiagnosticsTitle:'PWA-Gerätetest',pwaCheck:'Gerät prüfen',pwaCaution:'Erkennung ist kein Gerätetest. Push bei geschlossener App ist noch nicht aktiv.',localAIInstalled:'Lokale Modelle bereitgestellt'});
-Object.assign(dictionary.en, {pwaDiagnosticsTitle:'PWA device check',pwaCheck:'Check device',pwaCaution:'Feature detection is not a device test. Push while closed is not yet enabled.',localAIInstalled:'Local models provisioned'});
-Object.assign(dictionary.ja, {pwaDiagnosticsTitle:'PWA端末テスト',pwaCheck:'端末を確認',pwaCaution:'機能の検出は実機テストではありません。終了後のプッシュ通知は未対応です。',localAIInstalled:'ローカルモデルの準備済み'});
+Object.assign(dictionary.de, {pwaDiagnosticsTitle:'PWA-Gerätetest',pwaCheck:'Gerät prüfen',pwaCaution:'Geräteerkennung ersetzt keinen Praxistest. Push bei geschlossener PWA braucht HTTPS, Zustimmung und einen konfigurierten Server; Zustellung noch nicht auf realen Geräten geprüft.',localAIInstalled:'Modell-Dateien erkannt (Inferenz noch nicht geprüft)'});
+Object.assign(dictionary.en, {pwaDiagnosticsTitle:'PWA device check',pwaCheck:'Check device',pwaCaution:'Feature detection is not a device test. Closed-PWA push requires HTTPS, consent and a configured server; real device delivery has not been verified.',localAIInstalled:'Model assets detected (inference not verified)'});
+Object.assign(dictionary.ja, {pwaDiagnosticsTitle:'PWA端末テスト',pwaCheck:'端末を確認',pwaCaution:'機能検出は実機テストの代わりになりません。アプリ終了中のプッシュ通知にはHTTPS、本人の許可、サーバー設定が必要で、実機での配信は未検証です。',localAIInstalled:'モデルファイルを検出（推論動作は未検証）'});
 
 Object.assign(dictionary.de, {modelConsent:'Das Übersetzungsmodell kann je Sprachpaar mehrere Hundert MB auf dieses Gerät laden. Die Übersetzung erfolgt nur lokal. Fortfahren?'});
 Object.assign(dictionary.en, {modelConsent:'Translation models can download several hundred MB per language pair to your device. Translation stays local. Continue?'});
