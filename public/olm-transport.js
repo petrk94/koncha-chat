@@ -135,7 +135,8 @@ function validateMessage(room,state,payload,fromCurve){
   if(state.peerId && state.peerId!==payload.senderId)throw new Error('Olm device identifier has changed');
   if(room.peer?.publicKey&&!samePublic(room.peer.publicKey,payload.publicKey))throw new Error('Pinned signing identity changed');
   if(room.peer?.olmCurve && room.peer.olmCurve!==fromCurve)throw new Error('Pinned Olm key changed');
-  if(room.peer?.olmEd && payload.senderEd && room.peer.olmEd!==payload.senderEd)
+  if(!validCurve(payload.senderEd))throw new Error('Missing authenticated Olm fingerprint');
+  if(room.peer?.olmEd && room.peer.olmEd!==payload.senderEd)
     throw new Error('Pinned Olm fingerprint changed');
   return peer;
 }
@@ -180,7 +181,7 @@ export async function sendSecureMessage(room,identity,text,type='chat'){
     const current=await readOlmState(room.roomId);
     if(!current?.session)throw new Error('Waiting for encrypted peer handshake');
     if(type==='chat' && !current.peerCurve)throw new Error('Peer session not yet pinned');
-    const payload=basePayload(room,identity,type,text);
+    const payload={...basePayload(room,identity,type,text),senderEd:current.ownEd};
     const advanced=parseJSON(wasm.seal_message(current.session,JSON.stringify(payload)));
     const pending=envelope(current.ownCurve,advanced.message);
     const next={...current,session:JSON.stringify(advanced.session)};
