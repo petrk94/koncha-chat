@@ -3,10 +3,14 @@ import {
   deriveRoomKeys, encryptPayload, decryptPayload, randomId
 } from './crypto.js';
 import { romanizeKana } from './romanize.js';
-import { getSetting, putSetting, putMessage, getMessages, resetAll } from './db.js';
+import { getSetting, putSetting, putMessage, getMessages, resetAll, putVerifiedMessage } from './db.js';
 import { applyLanguage, translate } from './i18n.js';
 import { browserTranslation } from './translation.js';
 import { AttentionController } from './notifications.js';
+import { generateDeviceKeyPair, exportDevicePublicKey, deviceFingerprint, signChatPayload } from './identity.js';
+import { authenticateRoomMessage } from './message-policy.js';
+import { normalizeRooms, upsertRoom, labelForRoom } from './rooms.js';
+import { translationCapabilities } from './translation-capabilities.js';
 
 const $ = id => document.getElementById(id);
 const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
@@ -15,6 +19,14 @@ const malformedInvite = location.hash.startsWith('#invite=') && !pendingInvite;
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 let locale = 'de';
 let identity = null;
+let deviceKeyPair = null;
+let rooms = [];
+const unreadByRoom = new Map();
+const roomPrimed = new Set();
+let backgroundTimer = null;
+let presenceTimer = null;
+let backgroundPolling = false;
+let presenceEnabled = false;
 let room = null;
 let keys = null;
 let pollTimer = null;
@@ -46,11 +58,80 @@ function showIdentity() {
 function updateConversation() {
   const peer = room?.peer;
   const label = peer?.alias || t('chatName');
-  for (const id of ['chatTitle', 'contactName']) $(id).textContent = label;
-  for (const id of ['sidebarAvatar', 'headerAvatar']) $(id).textContent = avatarFor(peer?.alias);
+  $('contactName').textContent = label;
+  $('headerAvatar').textContent = avatarFor(peer?.alias);
   $('contactHandle').textContent = peer?.handle ? '@' + peer.handle : '';
-  $('roomSubtitle').textContent = peer?.handle ? '@' + peer.handle : t('chatSubtitle');
+  void refreshDeviceCodes();
+  renderRoomIndex();
 }
+function renderRoomIndex() {
+  const targets = [['roomList', true], ['savedRooms', false]];
+  for (const [id, sidebar] of targets) {
+    const container = $(id); container.replaceChildren();
+    for (const conversation of rooms) {
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.className = sidebar ? 'room-row' : 'saved-row';
+      if (sidebar) btn.setAttribute('aria-current', String(room?.roomId === conversation.roomId));
+      const label = document.createElement('span');
+      if (sidebar) {
+        label.className = 'room-row-body';
+        const title = document.createElement('strong'); title.textContent = labelForRoom(conversation);
+        const sub = document.createElement('small'); sub.textContent = conversation.peer?.handle ? '@' + conversation.peer.handle : t('chatSubtitle');
+        label.append(title, sub);
+        const avatar = document.createElement('span'); avatar.className = 'small-avatar'; avatar.textContent = avatarFor(labelForRoom(conversation));
+        btn.append(avatar, label);
+      } else {
+        const title = document.createElement('strong'); title.textContent = labelForRoom(conversation);
+        const sub = document.createElement('small'); sub.textContent = conversation.peer?.handle ? '@' + conversation.peer.handle : t('resume');
+        label.append(title, document.createTextNode(' '), sub); btn.append(label);
+      }
+      const n = unreadByRoom.get(conversation.roomId) || 0;
+      if (n > 0) { const badge = document.createElement('span'); badge.className = 'room-unread'; badge.textContent = n > 99 ? '99+' : String(n); btn.append(badge); }
+      btn.addEventListener('click', () => { void openRoom(conversation).catch(err => toast(`${t('roomError')}: ${err.message}`)); });
+      container.append(btn);
+    }
+  }
+}
+async function saveRoomRecord(changed) {
+  rooms = upsertRoom(rooms, changed);
+  await putSetting('rooms', rooms);
+  if (room?.roomId === changed.roomId) await putSetting('lastRoom', changed);
+  renderRoomIndex();
+}
+async function initializeDeviceKey() {
+  deviceKeyPair = await getSetting('deviceKeyPair');
+  if (!deviceKeyPair) {
+    deviceKeyPair = await generateDeviceKeyPair();
+    await putSetting('deviceKeyPair', deviceKeyPair);
+  }
+  identity.publicKey = await exportDevicePublicKey(deviceKeyPair);
+  identity.fingerprint = await deviceFingerprint(identity.publicKey);
+  await putSetting('identity', identity);
+}
+async function refreshDeviceCodes() {
+  if (!identity || !room) return;
+  $('deviceFingerprint').textContent = identity.fingerprint || '—';
+  $('peerFingerprint').textContent = room.peer?.publicKey ? await deviceFingerprint(room.peer.publicKey).catch(() => '—') : t('peerUnknown');
+  $('verificationState').textContent = room.peer?.verified ? t('peerVerified') : t('peerUnverified');
+  $('verifyPeerBtn').disabled = !room.peer?.publicKey || !!room.peer?.verified;
+}
+async function checkedMessage(chatRoom, chatKeys, envelope, fromLocalCache = false) {
+  const message = await decryptPayload(chatKeys.messageKey, envelope);
+  const verdict = await authenticateRoomMessage(chatRoom, message, identity, { fromLocalCache });
+  message.legacyUnsigned = verdict.legacyUnsigned;
+  const mine = verdict.mine;
+  if (!mine && !chatRoom.peer?.publicKey) {
+    chatRoom.peer = { alias: String(message.sender).slice(0, 32), handle: String(message.senderHandle || '').slice(0, 24), publicKey: message.publicKey, presenceId: message.presenceId || '', verified: false };
+    await saveRoomRecord(chatRoom); // Trust on first valid signed message; verify out-of-band.
+    if (room?.roomId === chatRoom.roomId) updateConversation();
+  }
+  if (!mine && chatRoom.peer?.publicKey && message.presenceId && !chatRoom.peer.presenceId) {
+    chatRoom.peer.presenceId = message.presenceId;
+    await saveRoomRecord(chatRoom);
+  }
+  return message;
+}
+
 function showInvitation() {
   clearInterval(pendingTimer); pendingTimer = null;
   $('inviteError').hidden = true;
@@ -93,7 +174,7 @@ function setLanguage(lang) {
   locale = ['de', 'en', 'ja'].includes(lang) ? lang : 'en';
   $('languageSelect').value = locale;
   applyLanguage(document, locale);
-  if (room) { $('connection').textContent = t('connected'); updateConversation(); void renderMessages(); }
+  if (room) { $('connection').textContent = t('presenceUnknown'); updateConversation(); void renderMessages(); }
   if (pendingInvite && !$('invitation').hidden) $('inviteDescription').textContent = pendingInvite.sender ? t('inviteFromDescription') : t('invitePageLead');
 }
 function preferredLanguage() {
@@ -103,19 +184,19 @@ function preferredLanguage() {
   }
   return 'en';
 }
-async function api(action, { method = 'GET', body = {}, authenticated = true } = {}) {
+async function api(action, { method = 'GET', body = {}, authenticated = true, contextRoom = room, contextKeys = keys } = {}) {
   const url = new URL('/api.php', location.origin);
   url.searchParams.set('action', action);
-  if (method === 'GET') url.searchParams.set('room', room.roomId);
+  if (method === 'GET') url.searchParams.set('room', contextRoom.roomId);
   const headers = {};
   if (authenticated) {
-    if (!keys) throw new Error('Missing room keys');
-    headers.Authorization = `Bearer ${keys.authToken}`;
+    if (!contextKeys) throw new Error('Missing room keys');
+    headers.Authorization = `Bearer ${contextKeys.authToken}`;
   }
   if (method === 'POST') headers['Content-Type'] = 'application/json';
   const response = await fetch(url, {
     method, cache: 'no-store', credentials: 'omit', headers,
-    ...(method === 'POST' ? { body: JSON.stringify({ roomId: room?.roomId ?? body.roomId, ...body }) } : {})
+    ...(method === 'POST' ? { body: JSON.stringify({ roomId: contextRoom?.roomId ?? body.roomId, ...body }) } : {})
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
@@ -142,11 +223,13 @@ function showLobby() {
   clearInterval(inviteTimer); inviteTimer = null;
   clearInterval(pendingTimer); pendingTimer = null;
   room = null; keys = null; activeInvite = null;
+  translateSession?.dispose(); translateSession = null;
   invitationAccepted = false;
   $('inviteStatus').hidden = true;
   showIdentity();
   screen('lobby');
-  getSetting('lastRoom').then(saved => { $('recentRoom').hidden = !saved; }).catch(() => {});
+  $('recentRoom').hidden = true;
+  renderRoomIndex();
 }
 async function checkPendingInvite() {
   const invite = pendingInvite;
@@ -183,11 +266,13 @@ async function openRoom(next) {
   clearInterval(inviteTimer);
   clearInterval(pendingTimer); pendingTimer = null;
   attention.clear();
+  unreadByRoom.delete(next.roomId);
   pollIsInitialized = false;
   room = next;
+  if (!room.presenceId) room.presenceId = randomId(12);
   keys = await deriveRoomKeys(room);
   await api('init', { method: 'POST' });
-  await putSetting('lastRoom', room);
+  await saveRoomRecord(room);
   lastErrorShown = false;
   activeInvite = null;
   currentMessages = await getMessages(room.roomId);
@@ -200,21 +285,28 @@ async function openRoom(next) {
   await renderMessages();
   await poll();
   pollTimer = setInterval(() => { void poll(); }, 2800);
+  if (presenceEnabled) void pulsePresence();
 }
 async function poll() {
   if (polling || !room || !keys) return;
   polling = true;
   try {
-    const received = await api('list');
+    const snapshotRoom = room;
+    const snapshotKeys = keys;
+    const received = await api('list', { contextRoom: snapshotRoom, contextKeys: snapshotKeys });
+    if (room !== snapshotRoom) return;
     const known = new Set(currentMessages.map(m => m.id));
     let changed = false;
     let newFromOthers = 0;
     for (const envelope of received.messages || []) {
       if (known.has(envelope.id)) continue;
       try {
-        const message = await decryptPayload(keys.messageKey, envelope);
+        const message = await checkedMessage(snapshotRoom, snapshotKeys, envelope);
+        const stored = message.signature
+          ? await putVerifiedMessage(snapshotRoom.roomId, envelope, message.senderId, message.nonce)
+          : (await putMessage(snapshotRoom.roomId, envelope), true);
+        if (!stored) continue;
         if (message.senderId !== identity.id) newFromOthers++;
-        await putMessage(room.roomId, envelope);
         currentMessages.push(envelope);
         known.add(envelope.id);
         changed = true;
@@ -224,7 +316,8 @@ async function poll() {
     // Initial sync may contain old messages. Only alert for later arrivals.
     if (pollIsInitialized && newFromOthers > 0) attention.incoming(newFromOthers);
     pollIsInitialized = true;
-    $('connection').textContent = t('connected');
+    roomPrimed.add(snapshotRoom.roomId);
+    await refreshPresence(snapshotRoom, snapshotKeys);
     lastErrorShown = false;
   } catch (error) {
     $('connection').textContent = t('offline');
@@ -238,18 +331,12 @@ async function renderMessages() {
   const displayed = [];
   for (const envelope of currentMessages) {
     try {
-      const data = await decryptPayload(keys.messageKey, envelope);
+      const data = await checkedMessage(room, keys, envelope, true);
       displayed.push({ ...data, id: envelope.id });
     } catch { /* Corrupted local data is never displayed. */ }
   }
   if (generation !== translationGeneration) return;
   displayed.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
-  const correspondent = [...displayed].reverse().find(m => m.senderId !== identity.id);
-  if (correspondent && (!room.peer || room.peer.alias !== correspondent.sender || (correspondent.senderHandle && room.peer.handle !== correspondent.senderHandle))) {
-    room.peer = { alias: correspondent.sender.slice(0, 32), handle: String(correspondent.senderHandle || '').slice(0, 24) };
-    updateConversation();
-    void putSetting('lastRoom', room);
-  }
   if (!displayed.length) {
     const empty = document.createElement('div'); empty.className = 'empty-state';
     const title = document.createElement('strong'); title.textContent = t('emptyTitle');
@@ -264,6 +351,7 @@ async function renderMessages() {
     const time = document.createElement('span'); time.className = 'time';
     time.textContent = new Date(data.ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     bubble.append(who, message);
+    if (data.legacyUnsigned) bubble.title = t('unsignedMessage');
     if ($('romajiToggle').checked && /[\u3040-\u30ff]/.test(data.text)) {
       const guide = document.createElement('div'); guide.className = 'romanized';
       guide.textContent = romanizeKana(data.text); bubble.append(guide);
@@ -354,6 +442,62 @@ async function enableTranslation() {
   }
 }
 
+
+async function pulsePresence() {
+  if (!presenceEnabled || document.hidden || !identity || !rooms.length) return;
+  for (const chatRoom of rooms) {
+    try {
+      if (!chatRoom.presenceId) continue;
+      const chatKeys = await deriveRoomKeys(chatRoom);
+      await api('heartbeat', { method: 'POST', body: { presenceId: chatRoom.presenceId }, contextRoom: chatRoom, contextKeys: chatKeys });
+    } catch { /* Connection may be unavailable. Privacy opt-in remains local. */ }
+  }
+}
+async function refreshPresence(chatRoom, chatKeys) {
+  if (!chatRoom?.peer?.presenceId || !presenceEnabled) { $('connection').textContent = t('presenceUnknown'); return; }
+  try {
+    const result = await api('presence', { contextRoom: chatRoom, contextKeys: chatKeys });
+    if (room?.roomId !== chatRoom.roomId) return;
+    const timestamp = result.presence?.[chatRoom.peer.presenceId];
+    $('connection').textContent = typeof timestamp === 'number' && Date.now()/1000 - timestamp < 70 ? t('peerOnline') : t('peerOffline');
+  } catch { if (room?.roomId === chatRoom.roomId) $('connection').textContent = t('offline'); }
+}
+async function pollOtherRooms() {
+  if (backgroundPolling || !identity || !rooms.length) return;
+  backgroundPolling = true;
+  try {
+    for (const chatRoom of [...rooms]) {
+      if (room?.roomId === chatRoom.roomId) continue;
+      try {
+        const chatKeys = await deriveRoomKeys(chatRoom);
+        const [remote, cached] = await Promise.all([
+          api('list', { contextRoom: chatRoom, contextKeys: chatKeys }), getMessages(chatRoom.roomId)
+        ]);
+        const known = new Set(cached.map(e => e.id));
+        let incomingCount = 0;
+        for (const envelope of remote.messages || []) {
+          if (known.has(envelope.id)) continue;
+          try {
+            const msg = await checkedMessage(chatRoom, chatKeys, envelope);
+            const stored = msg.signature
+              ? await putVerifiedMessage(chatRoom.roomId, envelope, msg.senderId, msg.nonce)
+              : (await putMessage(chatRoom.roomId, envelope), true);
+            if (!stored) continue;
+            known.add(envelope.id);
+            if (msg.senderId !== identity.id) incomingCount++;
+          } catch { /* Invalid signatures, ciphertext or rotated keys are discarded. */ }
+        }
+        if (roomPrimed.has(chatRoom.roomId) && incomingCount > 0) {
+          unreadByRoom.set(chatRoom.roomId, (unreadByRoom.get(chatRoom.roomId) || 0) + incomingCount);
+          attention.incoming(incomingCount);
+          renderRoomIndex();
+        }
+        roomPrimed.add(chatRoom.roomId);
+      } catch { /* No active server / offline partner. Retry next poll. */ }
+    }
+  } finally { backgroundPolling = false; }
+}
+
 // One-time user activation permits Web Audio on supporting browsers.
 // Background browsers may still suspend audio despite this action.
 document.addEventListener('pointerdown', () => attention.unlockAudio(), { once: true, capture: true });
@@ -367,6 +511,24 @@ $('notifyBtn').addEventListener('click', async () => {
   const status = await attention.requestPermission();
   $('notificationStatus').textContent = t(status === 'granted' ? 'notificationsReady' : status === 'denied' ? 'notificationsDenied' : 'notificationsUnavailable');
 });
+$('presenceToggle').addEventListener('change', async () => {
+  presenceEnabled = $('presenceToggle').checked;
+  await putSetting('presenceEnabled', presenceEnabled);
+  if (presenceEnabled) await pulsePresence();
+  if (room && keys) await refreshPresence(room, keys);
+});
+$('verifyPeerBtn').addEventListener('click', async () => {
+  if (!room?.peer?.publicKey || room.peer.verified) return;
+  const code = await deviceFingerprint(room.peer.publicKey);
+  if (!confirm(`${t('verifyInstructions')}\n\n${code}`)) return;
+  room.peer.verified = true;
+  await saveRoomRecord(room);
+  await refreshDeviceCodes();
+});
+$('checkTranslationBtn').addEventListener('click', async () => {
+  const info = await translationCapabilities();
+  $('translationCapability').textContent = info.native ? t('localAINative') : info.webGPU ? t('localAIGPUUnconfigured') : info.wasm ? t('localAIWASMUnconfigured') : t('localAIUnavailable');
+});
 $('languageSelect').addEventListener('change', async () => { setLanguage($('languageSelect').value); await putSetting('locale', locale); });
 $('startBtn').addEventListener('click', async () => {
   const alias = $('nickname').value.trim();
@@ -377,12 +539,13 @@ $('startBtn').addEventListener('click', async () => {
     if (!/^[a-z][a-z0-9._-]{2,23}$/.test(handle)) return toast(t('invalidHandle'));
     identity = { id: randomId(16), alias: alias.slice(0, 32), handle };
     await putSetting('consent', true); await putSetting('identity', identity);
+    await initializeDeviceKey();
     if (invitationAccepted && pendingInvite) await claimPendingInvite();
     else showLobby();
   } catch (error) { toast(`${t('localError')}: ${error.message}`); }
 });
 $('createBtn').addEventListener('click', async () => {
-  try { await openRoom(createRoom()); } catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
+  try { await openRoom({ ...createRoom(), requireSignatures: true }); } catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
 });
 $('joinBtn').addEventListener('click', async () => {
   if (!pendingInvite) return;
@@ -399,14 +562,14 @@ $('rejectInviteBtn').addEventListener('click', () => {
 });
 $('lobbyResetBtn').addEventListener('click', () => $('resetBtn').click());
 $('mobileBackBtn').addEventListener('click', showLobby);
-$('roomRow').addEventListener('click', () => closePreferences());
+$('sidebarNewChatBtn').addEventListener('click', showLobby);
 $('resumeBtn').addEventListener('click', async () => {
   try { const previous = await getSetting('lastRoom'); if (previous) await openRoom(previous); }
   catch (error) { showLobby(); toast(`${t('roomError')}: ${error.message}`); }
 });
 $('shareBtn').addEventListener('click', async () => {
   $('shareBtn').disabled = true;
-  try { await makeInvite(); } catch (error) { toast(`${t('invitationError')}: ${error.message}`); }
+  try { await makeInvite(); } catch (error) { toast(error.message === 'room_already_joined' ? t('inviteAlreadyJoined') : `${t('invitationError')}: ${error.message}`); }
   finally { $('shareBtn').disabled = false; }
 });
 $('revokeBtn').addEventListener('click', async () => {
@@ -455,9 +618,10 @@ $('sendForm').addEventListener('submit', async event => {
   if (!room || !keys || !text) return;
   $('sendBtn').disabled = true;
   try {
-    const envelope = await encryptPayload(keys.messageKey, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now() });
+    const signed = await signChatPayload(deviceKeyPair, room.roomId, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now(), nonce: randomId(16), presenceId: room.presenceId });
+    const envelope = await encryptPayload(keys.messageKey, signed);
     await api('send', { method: 'POST', body: { envelope } });
-    await putMessage(room.roomId, envelope);
+    await putVerifiedMessage(room.roomId, envelope, identity.id, signed.nonce);
     currentMessages.push(envelope); field.value = '';
     await renderMessages();
   } catch (error) { toast(`${t('sendError')}: ${error.message}`); }
@@ -465,9 +629,9 @@ $('sendForm').addEventListener('submit', async event => {
 });
 $('resetBtn').addEventListener('click', async () => {
   if (!confirm(t('resetConfirm'))) return;
-  clearInterval(pollTimer); clearInterval(inviteTimer); clearInterval(pendingTimer);
+  clearInterval(pollTimer); clearInterval(backgroundTimer); clearInterval(presenceTimer); clearInterval(inviteTimer); clearInterval(pendingTimer);
+  translateSession?.dispose(); translateSession = null;
   attention.clear();
-  translateSession?.dispose();
   try { await resetAll(); location.replace(location.pathname); }
   catch (error) { toast(`${t('resetError')}: ${error.message}`); }
 });
@@ -488,6 +652,16 @@ $('resetBtn').addEventListener('click', async () => {
         await putSetting('identity', identity);
       }
     }
+    if (identity) {
+      await initializeDeviceKey();
+      rooms = normalizeRooms(await getSetting('rooms'));
+      if (!rooms.length) { const previous = await getSetting('lastRoom'); if (previous?.roomId) rooms = [previous]; }
+      backgroundTimer = setInterval(() => { void pollOtherRooms(); }, 12000);
+      presenceTimer = setInterval(() => { void pulsePresence(); }, 24000);
+      void pollOtherRooms();
+    }
+    presenceEnabled = await getSetting('presenceEnabled') === true;
+    $('presenceToggle').checked = presenceEnabled;
     if (pendingInvite || malformedInvite) showInvitation();
     else if (identity && new URLSearchParams(location.search).has('resume')) {
       const previous = await getSetting('lastRoom');

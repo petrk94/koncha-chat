@@ -10,3 +10,19 @@
 @media(max-width:760px){.topbar{height:54px;flex-basis:54px;padding:0 14px}.alpha-mark{font-size:10px;margin-left:6px}.language-select{font-size:12px}.panel{padding:24px;margin:16px;align-self:center}.chat-layout{height:calc(100dvh - 54px);grid-template-columns:minmax(0,1fr);border:0}.sidebar{display:none}.conversation-top{padding:0 12px;height:55px;flex-basis:55px}.mobile-back{display:grid}.messages{padding:16px 12px}.bubble{max-width:88%}.composer-area{padding:8px 9px max(8px,env(safe-area-inset-bottom))}.composer{gap:5px}.emoji-button{width:32px}.send-button{width:42px}.preferences{width:min(100%,360px);padding:0 18px 22px}.inviter-note{max-width:95px}.invite-actions{flex-wrap:wrap}.invite-actions button{flex:1}}
 @media(max-width:380px){.alpha-mark{display:none}.panel{padding:20px}.contact-title small{font-size:10px}.inviter-card{gap:8px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* v0.5: More than one conversation, without permanent metadata panels. */
+.room-list{display:flex;flex-direction:column;gap:3px;padding:4px 8px;overflow-y:auto;flex:1;min-height:0}
+.room-list .room-row{width:100%;display:flex;align-items:center;text-align:left;border:0;cursor:pointer}
+.room-row[aria-current="true"]{background:#293531}
+.saved-rooms{display:flex;flex-direction:column;gap:5px;margin:18px 0 12px}
+.saved-rooms:empty{display:none}
+.saved-rooms .saved-row{width:100%;border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;padding:12px 14px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.saved-row:hover,.room-list .room-row:hover{background:#304039}
+.saved-row small{color:var(--muted);font-size:11px}
+.sidebar-heading{gap:6px}.sidebar-heading .text-button{margin-left:auto;white-space:nowrap;font-size:12px}
+.room-unread{min-width:20px;min-height:20px;padding:0 5px;display:grid;place-items:center;background:#9cc1aa;color:#20362c;border-radius:9px;font-size:11px;font-weight:600}
+#deviceFingerprint,#peerFingerprint{font-size:11px;line-height:1.6;overflow-wrap:anywhere;user-select:all;display:block;margin:4px 0 12px}
+#verificationState{font-weight:500}
+
+.room-list .room-row{background:transparent;border-left:2px solid transparent}
+.room-list .room-row[aria-current="true"]{background:#293531;border-left-color:var(--accent)}

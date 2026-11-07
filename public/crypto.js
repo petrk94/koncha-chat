@@ -38,7 +38,7 @@ export function parseInvite(hash) {
 export function createInvite(room, identity = null) {
   if (!room?.roomId || !room?.secret) throw new Error('Invalid room');
   return { roomId: room.roomId, inviteId: randomId(16), token: randomId(32),
-    sender: String(identity?.alias || '').slice(0, 32), handle: String(identity?.handle || '').slice(0, 24) };
+    sender: String(identity?.alias || '').slice(0, 32), handle: String(identity?.handle || '').slice(0, 24), publicKey: identity?.publicKey || null, presenceId: room.presenceId || '' };
 }
 export function inviteUrl(base, invite) {
   const url = new URL(base);
@@ -67,7 +67,7 @@ export async function sealInvite(invite, room) {
   if (invite.roomId !== room.roomId) throw new Error('Wrong room');
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
   const key = await inviteKey(invite);
-  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret, sender: invite.sender || '', handle: invite.handle || '' })));
+  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret, sender: invite.sender || '', handle: invite.handle || '', publicKey: invite.publicKey || null, presenceId: invite.presenceId || '', requireSignatures: room.requireSignatures === true })));
   return { iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(ciphertext)) };
 }
 export async function unsealInvite(invite, payload) {
@@ -79,7 +79,7 @@ export async function unsealInvite(invite, payload) {
   if (room.roomId !== invite.roomId || b64uDecode(room.secret).length !== 32) throw new Error('Invalid invite payload');
   // A modified preview name must never silently become an accepted chat identity.
   if ((invite.sender || '') !== (room.sender || '') || (invite.handle || '') !== (room.handle || '')) throw new Error('invite_identity_mismatch');
-  return room.sender ? { roomId: room.roomId, secret: room.secret, peer: { alias: room.sender, handle: room.handle || '' } } : { roomId: room.roomId, secret: room.secret };
+  return room.sender ? { roomId: room.roomId, secret: room.secret, ...(room.requireSignatures ? { requireSignatures: true } : {}), peer: { alias: room.sender, handle: room.handle || '', publicKey: room.publicKey || null, presenceId: room.presenceId || '', verified: false } } : { roomId: room.roomId, secret: room.secret, ...(room.requireSignatures ? { requireSignatures: true } : {}) };
 }
 export async function deriveRoomKeys(room) {
   const raw = b64uDecode(room.secret);
@@ -97,7 +97,7 @@ export async function deriveRoomKeys(room) {
 export async function encryptPayload(messageKey, payload) {
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
   const raw = enc.encode(JSON.stringify(payload));
-  if (raw.length > 6000) throw new Error('Message is too long');
+  if (raw.length > 7600) throw new Error('Message is too long');
   const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, messageKey, raw);
   return { v: 1, id: cryptoApi.randomUUID(), iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(ciphertext)) };
 }

@@ -62,10 +62,9 @@ test('one-time invite: preflight does not consume; first redemption wins; rotati
     assert.equal(first.status, 200);
     assert.equal((await first.json()).payload.ciphertext, dataA.payload.ciphertext);
     assert.equal((await call('invite_claim', 'POST', dataA, null)).status, 410);
-    assert.equal((await call('invite_create', 'POST', dataA)).status, 200);
-    assert.equal((await call('invite_create', 'POST', dataB)).status, 200);
-    assert.equal((await call('invite_claim', 'POST', dataA, null)).status, 410);
-    assert.equal((await call('invite_claim', 'POST', dataB, null)).status, 200);
+    // A claimed conversation is one-to-one; a third participant must get a NEW room.
+    assert.equal((await call('invite_create', 'POST', dataA)).status, 409);
+    assert.equal((await call('invite_create', 'POST', dataB)).status, 409);
   });
 });
 
@@ -97,5 +96,53 @@ test('revoking an invitation prevents use but leaves existing chat intact', asyn
     assert.equal((await call('invite_revoke', 'POST')).status, 200);
     assert.equal((await call('invite_claim', 'POST', data, null)).status, 410);
     assert.equal((await call('list')).status, 200);
+  });
+});
+
+test('room-specific presence expires and is not a server-side identity claim', async () => {
+  await withServer(async ({ call, room }) => {
+    const id = 'A'.repeat(16);
+    assert.equal((await call('heartbeat', 'POST', { presenceId: 'invalid' })).status, 400);
+    assert.equal((await call('heartbeat', 'POST', { presenceId: id })).status, 200);
+    const active = await (await call('presence')).json();
+    assert.equal(typeof active.presence[id], 'number');
+    assert.equal(JSON.stringify(active).includes(room.secret), false);
+    // A relay authorization token grants room access, not verified human identity.
+  });
+});
+
+test('server retains ciphertext up to 7 days but deletes older messages on room activity', async () => {
+  await withServer(async ({ room, keys, temp, call }) => {
+    const old = await encryptPayload(keys.messageKey, { text: 'expired', sender:'a', senderId:'a', ts:1 });
+    const kept = await encryptPayload(keys.messageKey, { text: 'offline', sender:'a', senderId:'a', ts:2 });
+    assert.equal((await call('send', 'POST', {envelope:old})).status, 200);
+    assert.equal((await call('send', 'POST', {envelope:kept})).status, 200);
+    const file = path.join(temp, `${room.roomId}.json`);
+    const obj = JSON.parse(await readFile(file, 'utf8'));
+    obj.messages[0].storedAt = Math.floor(Date.now()/1000) - 8*86400;
+    obj.messages[1].storedAt = Math.floor(Date.now()/1000) - 3*86400;
+    await writeFile(file, JSON.stringify(obj));
+    const result = await (await call('list')).json();
+    assert.deepEqual(result.messages.map(x => x.id), [kept.id]);
+    assert.equal(JSON.stringify(result).includes('offline'), false);
+    const stored = JSON.parse(await readFile(file,'utf8'));
+    assert.equal(stored.messages.length, 1);
+  });
+});
+
+test('relay accepts an encrypted invitation carrying a P-256 device identity without storing plaintext name', async () => {
+  const { generateDeviceKeyPair, exportDevicePublicKey } = await import('../public/identity.js');
+  await withServer(async ({ room, call, temp }) => {
+    const pair = await generateDeviceKeyPair();
+    const inv = createInvite({ ...room, requireSignatures: true }, { alias: 'Yuki Tanaka', handle: 'yuki.t', publicKey: await exportDevicePublicKey(pair) });
+    const payload = await sealInvite(inv, { ...room, requireSignatures: true });
+    const body = { inviteId: inv.inviteId, verifier: await tokenVerifier(inv.token), payload };
+    const response = await call('invite_create', 'POST', body);
+    assert.equal(response.status, 200);
+    const state = JSON.parse(await readFile(path.join(temp,`${room.roomId}.json`),'utf8'));
+    assert.equal(JSON.stringify(state).includes('Yuki Tanaka'), false);
+    assert.equal(JSON.stringify(state).includes('yuki.t'), false);
+    assert.equal((await call('invite_claim','POST',body,null)).status,200);
+    assert.equal((await call('invite_create','POST',body)).status,409);
   });
 });

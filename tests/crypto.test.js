@@ -12,7 +12,7 @@ test('rooms and one-time invite URLs are distinct; legacy perpetual invites are 
   assert.notEqual(a.roomId, b.roomId);
   assert.notEqual(a.secret, b.secret);
   const invite = createInvite(a);
-  assert.deepEqual(parseInvite(new URL(inviteUrl('https://example.org/', invite)).hash), invite);
+  assert.deepEqual(parseInvite(new URL(inviteUrl('https://example.org/', invite)).hash), Object.fromEntries(['roomId','inviteId','token','sender','handle'].map(k => [k, invite[k]])));
   assert.equal(parseInvite(`#join=${a.roomId}.${a.secret}`), null);
   assert.equal(parseInvite('#invite=broken'), null);
   assert.notEqual(createInvite(a).token, invite.token);
@@ -74,7 +74,7 @@ test('personal invitation previews a locally declared name and handle, with encr
   assert.equal(preview.handle, 'yuki.yamada');
   const payload = await sealInvite(invite, room);
   const joined = await unsealInvite(preview, payload);
-  assert.deepEqual(joined, { ...room, peer: { alias: '山田 ゆき', handle: 'yuki.yamada' } });
+  assert.deepEqual(joined, { ...room, peer: { alias: '山田 ゆき', handle: 'yuki.yamada', publicKey: null, presenceId: '', verified: false } });
   const changed = { ...preview, sender: 'Impostor' };
   await assert.rejects(unsealInvite(changed, payload), /invite_identity_mismatch/);
   assert.equal(JSON.stringify(payload).includes('山田'), false);

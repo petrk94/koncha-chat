@@ -107,3 +107,49 @@ export function applyLanguage(root, language) {
   for (const element of root.querySelectorAll('[data-i18n]')) element.textContent = translate(element.dataset.i18n, language);
   for (const element of root.querySelectorAll('[data-i18n-placeholder]')) element.placeholder = translate(element.dataset.i18nPlaceholder, language);
 }
+// 0.5 additions; these keys are deliberately separate from the translated message model.
+Object.assign(dictionary.de, {
+  presenceTitle:'Online-Anzeige', presenceOptIn:'Meine Aktivität in Gesprächen anzeigen',
+  presenceWarning:'Freiwillig. Sichtbar nur bei laufender App; der Relay sieht Zeitpunkte und pseudonyme Raumkennungen.',
+  presenceUnknown:'Online-Status unbekannt', peerOnline:'Gerade online', peerOffline:'Nicht online',
+  peerUnknown:'Noch kein Geräteschlüssel bekannt', peerVerified:'Geräteschlüssel von dir bestätigt', peerUnverified:'Geräteschlüssel nicht bestätigt',
+  verifyPeer:'Nach Abgleich bestätigen', verifyInstructions:'Vergleiche den gesamten Sicherheitscode persönlich oder über einen bereits vertrauenswürdigen Kanal. Nur bestätigen, wenn alle Zeichen übereinstimmen.',
+  deviceFingerprintLabel:'Sicherheitscode dieses Geräts', peerFingerprintLabel:'Sicherheitscode des Gegenübers',
+  unsignedMessage:'Alte Nachricht ohne Gerätesignatur – unbestätigt',
+  checkLocalAI:'Lokale Übersetzung prüfen', localAINative:'Browser-Übersetzer erkannt (Sprachpaar muss beim Aktivieren geprüft werden).',
+  localAIGPUUnconfigured:'WebGPU verfügbar. Ein geprüftes, lokales Übersetzungsmodell ist noch nicht installiert.',
+  localAIWASMUnconfigured:'WebAssembly verfügbar. Ein geprüftes, lokales Übersetzungsmodell ist noch nicht installiert.',
+  localAIUnavailable:'Keine lokale Übersetzungsumgebung verfügbar.',
+  serverText:'Test-Relay: Raumkennung, verschlüsselte Nachrichten und Zeitpunkte. Nachrichten werden bis zu 7 Tage beim nächsten Zugriff aufbewahrt; Logs/Backups ggf. länger.',
+  inviteAlreadyJoined:'Dieser Raum hat bereits einen Gesprächspartner. Erstelle für jede weitere Person einen neuen Chat.'
+});
+Object.assign(dictionary.en, {
+  presenceTitle:'Online status', presenceOptIn:'Share my online activity in conversations',
+  presenceWarning:'Optional. Only while Koncha is running; the relay sees timestamps and room-specific pseudonyms.',
+  presenceUnknown:'Online status unknown', peerOnline:'Online now', peerOffline:'Not online',
+  peerUnknown:'No device key yet', peerVerified:'Device key confirmed by you', peerUnverified:'Device key not confirmed',
+  verifyPeer:'Confirm after comparison', verifyInstructions:'Compare the FULL security code in person or over an already trusted channel. Confirm only if every character matches.',
+  deviceFingerprintLabel:'Security code of this device', peerFingerprintLabel:'Security code of the other device',
+  unsignedMessage:'Legacy message without device signature – unverified',
+  checkLocalAI:'Check local translation', localAINative:'Native browser translator detected (language pair is checked when enabled).',
+  localAIGPUUnconfigured:'WebGPU available. No reviewed local translation model has been installed yet.',
+  localAIWASMUnconfigured:'WebAssembly available. No reviewed local translation model has been installed yet.',
+  localAIUnavailable:'No local translation runtime available.',
+  serverText:'Test relay: room ID, ciphertext and timestamps. Messages are retained for up to 7 days until the next access; logs/backups may last longer.',
+  inviteAlreadyJoined:'This room already has a partner. Create a new chat for another person.'
+});
+Object.assign(dictionary.ja, {
+  presenceTitle:'オンライン表示', presenceOptIn:'会話相手にオンライン状態を表示する',
+  presenceWarning:'任意の機能です。アプリの実行中のみ表示され、中継サーバーには時刻と部屋ごとの仮名識別子が残ります。',
+  presenceUnknown:'オンライン状態は不明', peerOnline:'オンライン', peerOffline:'オフライン',
+  peerUnknown:'相手の端末鍵はまだ不明です', peerVerified:'確認済みの端末鍵', peerUnverified:'端末鍵は未確認です',
+  verifyPeer:'照合後に確認する', verifyInstructions:'すべてのセキュリティコードを対面または信頼できる別の方法で照合してください。完全に一致した場合のみ確認してください。',
+  deviceFingerprintLabel:'この端末のセキュリティコード', peerFingerprintLabel:'相手の端末のセキュリティコード',
+  unsignedMessage:'旧形式の署名がないメッセージ：未確認',
+  checkLocalAI:'ローカル翻訳を確認', localAINative:'ブラウザー内蔵翻訳を検出しました。言語の組み合わせは有効化時に確認します。',
+  localAIGPUUnconfigured:'WebGPUは利用可能ですが、確認済みのローカル翻訳モデルはまだありません。',
+  localAIWASMUnconfigured:'WebAssemblyは利用可能ですが、確認済みのローカル翻訳モデルはまだありません。',
+  localAIUnavailable:'ローカル翻訳環境が利用できません。',
+  serverText:'テスト中継サーバーには部屋ID、暗号文、時刻を保存します。メッセージは最大7日間で、次のアクセス時に削除されます。ログやバックアップは長く残る可能性があります。',
+  inviteAlreadyJoined:'この部屋には既に相手がいます。別の相手には新しいチャットを作成してください。'
+});

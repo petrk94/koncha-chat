@@ -54,7 +54,7 @@ function cleanMessages(array &$state): bool {
     $now = time();
     $state['messages'] = array_values(array_filter($state['messages'] ?? [], static function ($msg) use ($now) {
         return is_array($msg) && isset($msg['storedAt']) && is_int($msg['storedAt'])
-            && ($now - $msg['storedAt'] < 86400);
+            && ($now - $msg['storedAt'] < 604800);
     }));
     if (count($state['messages']) > 300) $state['messages'] = array_slice($state['messages'], -300);
     return $before !== count($state['messages']);
@@ -64,8 +64,8 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (!in_array($method, ['GET', 'POST'], true)) reply(405, ['error' => 'Method not allowed']);
 if ($method === 'POST' && !str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) reply(415, ['error' => 'Expected application/json']);
 $action = $_GET['action'] ?? '';
-if (!in_array($action, ['init', 'list', 'send', 'invite_create', 'invite_claim', 'invite_revoke', 'invite_status', 'invite_check'], true)) reply(404, ['error' => 'Unknown action']);
-if (($action === 'list' || $action === 'invite_status') !== ($method === 'GET')) reply(405, ['error' => 'Method not allowed']);
+if (!in_array($action, ['init', 'list', 'send', 'invite_create', 'invite_claim', 'invite_revoke', 'invite_status', 'invite_check', 'heartbeat', 'presence'], true)) reply(404, ['error' => 'Unknown action']);
+if ((in_array($action, ['list', 'invite_status', 'presence'], true)) !== ($method === 'GET')) reply(405, ['error' => 'Method not allowed']);
 $body = $method === 'POST' ? postJson() : [];
 $room = $method === 'POST' ? ($body['roomId'] ?? null) : ($_GET['room'] ?? null);
 if (!validRoom($room)) reply(400, ['error' => 'Invalid room']);
@@ -75,6 +75,7 @@ if (!$claim && $token === null) reply(401, ['error' => 'Missing authorization'])
 if ($action === 'send' && !validEnvelope($body['envelope'] ?? null)) reply(400, ['error' => 'Invalid envelope']);
 if ($action === 'invite_create' && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null) || !validInvitePayload($body['payload'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
 if ($claim && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
+if ($action === 'heartbeat' && !exact($body['presenceId'] ?? null, 16)) reply(400, ['error' => 'Invalid presence token']);
 
 // The directory must be OUTSIDE the document root. File locking makes one-time claims atomic.
 $directory = getenv('KONCHA_DATA_DIR') ?: dirname(__DIR__) . '/var/rooms';
@@ -93,12 +94,18 @@ try {
     $modified = false;
     if ($state === null) {
         if ($action !== 'init') reply(404, ['error' => 'Room not found']);
-        $state = ['verifier' => hash('sha256', $token), 'createdAt' => time(), 'messages' => [], 'invite' => null];
+        $state = ['verifier' => hash('sha256', $token), 'createdAt' => time(), 'messages' => [], 'invite' => null, 'presence' => [], 'claimed' => false];
         $modified = true;
     } elseif (!$claim && !hash_equals($state['verifier'], hash('sha256', $token))) {
         reply(403, ['error' => 'Access denied']);
     }
     $modified = cleanMessages($state) || $modified;
+    $recent = [];
+    foreach ($state['presence'] ?? [] as $id => $seen) {
+        if (exact($id, 16) && is_int($seen) && $seen > time() - 70) $recent[$id] = $seen;
+    }
+    if ($recent !== ($state['presence'] ?? [])) { $state['presence'] = $recent; $modified = true; }
+
     if ($claim) {
         $invite = $state['invite'] ?? null;
         if (!is_array($invite) || !hash_equals($invite['id'], $body['inviteId'])) reply(410, ['error' => 'invite_unavailable']);
@@ -118,8 +125,10 @@ try {
         if ($action === 'invite_check') reply(200, ['expiresAt' => $invite['expiresAt']]);
         $payload = $invite['payload'];
         $state['invite'] = null; // atomic one-time redemption under exclusive lock
+        $state['claimed'] = true; // one room is always for exactly two peers
         $modified = true;
     } elseif ($action === 'invite_create') {
+        if (!empty($state['claimed'])) reply(409, ['error' => 'room_already_joined']);
         $state['invite'] = [
             'id' => $body['inviteId'], 'verifier' => $body['verifier'],
             'payload' => $body['payload'], 'expiresAt' => time() + 3600,
@@ -127,6 +136,11 @@ try {
         $modified = true;
     } elseif ($action === 'invite_revoke') {
         $state['invite'] = null;
+        $modified = true;
+    } elseif ($action === 'heartbeat') {
+        $state['presence'][$body['presenceId']] = time();
+        // Protect the file-backed demo relay from unbounded presence entries.
+        if (count($state['presence']) > 4) $state['presence'] = array_slice($state['presence'], -4, null, true);
         $modified = true;
     } elseif ($action === 'send') {
         $envelope = $body['envelope'];
@@ -152,6 +166,7 @@ try {
     if ($action === 'invite_create') reply(200, ['expiresAt' => $state['invite']['expiresAt']]);
     if ($action === 'invite_status') reply(200, ['expiresAt' => (($state['invite']['expiresAt'] ?? 0) > time()) ? $state['invite']['expiresAt'] : null]);
     if ($action === 'list') reply(200, ['messages' => $state['messages']]);
+    if ($action === 'presence') reply(200, ['presence' => $state['presence']]);
     reply(200, ['ok' => true]);
 } finally {
     flock($handle, LOCK_UN);
