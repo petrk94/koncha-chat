@@ -12,8 +12,10 @@ await build({
 });
 await mkdir(outdir, { recursive: true });
 const source = new URL('../node_modules/onnxruntime-web/dist/', import.meta.url).pathname;
-const files = (await readdir(source)).filter(f => f.endsWith('.wasm'));
-if (!files.length) throw new Error('ONNX WASM assets missing. Run npm install before building.');
+const files = (await readdir(source)).filter(f => /^ort-wasm.*\.(wasm|mjs)$/.test(f));
+if (!files.some(f => f.endsWith('.wasm')) || !files.some(f => f.endsWith('.mjs'))) {
+  throw new Error('ONNX WASM binaries or their dynamic JS loader modules missing. Run npm install before building.');
+}
 await Promise.all(files.map(name => copyFile(join(source, name), join(outdir.pathname, name))));
 await writeFile(new URL('../public/vendor/onnx/README.txt', import.meta.url), 'ONNX Runtime assets: installed from the pinned package in package-lock.json.\n');
-console.log(`Built local worker and staged ${files.length} WASM files. Models must be provisioned separately under public/models/.`);
+console.log(`Built local worker and staged ${files.length} same-origin ONNX WASM/ESM runtime assets. Models must be provisioned separately under public/models/.`);
