@@ -12,6 +12,7 @@ import { generateDeviceKeyPair, exportDevicePublicKey, deviceFingerprint, signCh
 import { authenticateRoomMessage } from './message-policy.js';
 import { normalizeRooms, upsertRoom, labelForRoom } from './rooms.js';
 import { translationCapabilities } from './translation-capabilities.js';
+import { subscribeRoomPush, unsubscribeRoomPush } from './push-client.js';
 
 const $ = id => document.getElementById(id);
 const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
@@ -418,6 +419,7 @@ async function restoreChatPreferences() {
   $('sourceLanguage').value = saved.source || 'ja';
   $('targetLanguage').value = saved.target || locale;
   $('translationStatus').textContent = t('translationHint');
+  $('pushStatus').textContent = t('webPushInfo');
   translateSession?.dispose(); translateSession = null;
   translationGeneration++;
 }
@@ -439,7 +441,13 @@ async function enableTranslation() {
   $('translationStatus').textContent = t('translationDownload');
   try {
     const caps = await translationCapabilities();
-    if (!caps.native && caps.localModelBundled && !confirm(t('modelConsent'))) throw new Error('Model download declined');
+    // A native Translator API may exist but not support the selected language
+    // pair. Consent to the large self-hosted WASM fallback only when needed.
+    let nativePair = false;
+    try {
+      if (caps.native) nativePair = (await globalThis.Translator.availability({sourceLanguage:from,targetLanguage:to})) !== 'unavailable';
+    } catch { /* Browser model unavailable for this pair. */ }
+    if (!nativePair && caps.localModelBundled && !confirm(t('modelConsent'))) throw new Error('Model download declined');
     const session = await browserTranslation({ status: text => { $('translationStatus').textContent = text; } });
     await session.prepare(from, to);
     if (!$('translationToggle').checked) { session.dispose(); return; }
@@ -518,6 +526,23 @@ $('soundToggle').addEventListener('change', async () => {
   attention.setSound($('soundToggle').checked);
   if ($('soundToggle').checked) attention.unlockAudio();
   await putSetting('alertSound', $('soundToggle').checked);
+});
+$('pushSubscribeBtn').addEventListener('click', async () => {
+  if (!room || !keys) return;
+  $('pushSubscribeBtn').disabled = true;
+  const activeRoom = room, activeKeys = keys;
+  try {
+    await subscribeRoomPush({ api, room: activeRoom, keys: activeKeys });
+    $('pushStatus').textContent = t('webPushEnabled');
+  } catch (error) { $('pushStatus').textContent = error.message; }
+  finally { $('pushSubscribeBtn').disabled = false; }
+});
+$('pushUnsubscribeBtn').addEventListener('click', async () => {
+  if (!room || !keys) return;
+  try {
+    await unsubscribeRoomPush({ api, room, keys });
+    $('pushStatus').textContent = t('webPushDisabled');
+  } catch (error) { $('pushStatus').textContent = error.message; }
 });
 $('notifyBtn').addEventListener('click', async () => {
   const status = await attention.requestPermission();
@@ -636,7 +661,7 @@ $('sendForm').addEventListener('submit', async event => {
   try {
     const signed = await signChatPayload(deviceKeyPair, room.roomId, { text, sender: identity.alias, senderHandle: identity.handle, senderId: identity.id, ts: Date.now(), nonce: randomId(16), presenceId: room.presenceId });
     const envelope = await encryptPayload(keys.messageKey, signed);
-    await api('send', { method: 'POST', body: { envelope } });
+    await api('send', { method: 'POST', body: { envelope, senderPresenceId: room.presenceId } });
     await putVerifiedMessage(room.roomId, envelope, identity.id, signed.nonce);
     currentMessages.push(envelope); field.value = '';
     await renderMessages();
@@ -648,7 +673,26 @@ $('resetBtn').addEventListener('click', async () => {
   clearInterval(pollTimer); clearInterval(backgroundTimer); clearInterval(presenceTimer); clearInterval(inviteTimer); clearInterval(pendingTimer);
   translateSession?.dispose(); translateSession = null;
   attention.clear();
-  try { await resetAll(); location.replace(location.pathname); }
+  try {
+    // A PushSubscription is shared across chats in the same PWA scope. Revoke
+    // every server-side registration BEFORE destroying the local room keys.
+    // If offline, warn: losing keys would prevent us from revoking remotely.
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration?.('/');
+      const sub = await reg?.pushManager?.getSubscription?.();
+      if (sub) {
+        for (const item of rooms) {
+          const itemKeys = await deriveRoomKeys(item);
+          await api('push_unsubscribe', { method:'POST', contextRoom:item, contextKeys:itemKeys,
+            body:{ deviceId:item.presenceId, endpoint:sub.endpoint } });
+        }
+        await sub.unsubscribe();
+      }
+    } catch (error) {
+      if (!confirm(t('resetPushWarning'))) return;
+    }
+    await resetAll(); location.replace(location.pathname);
+  }
   catch (error) { toast(`${t('resetError')}: ${error.message}`); }
 });
 

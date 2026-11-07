@@ -101,7 +101,9 @@
             <label class="check compact"><input type="checkbox" id="soundToggle" checked><span data-i18n="soundSetting">Ton bei neuen Nachrichten im Hintergrund</span></label>
             <button id="notifyBtn" class="secondary full" type="button" data-i18n="enableNotifications">Systembenachrichtigungen aktivieren</button>
             <p id="notificationStatus" class="fineprint" data-i18n="notificationsHint">Nur bei geöffnetem Tab. Für Systemhinweise ist deine Freigabe nötig.</p>
-            <p class="fineprint" data-i18n="pushNotYet">Bei vollständig geschlossener App noch keine Push-Zustellung.</p>
+            <button id="pushSubscribeBtn" class="secondary full" type="button" data-i18n="enableWebPush">Web Push für diesen Chat aktivieren</button>
+            <button id="pushUnsubscribeBtn" class="text-button" type="button" data-i18n="disableWebPush">Web Push für diesen Chat deaktivieren</button>
+            <p id="pushStatus" class="fineprint" role="status" data-i18n="webPushInfo">Optional: Der Push-Dienst erhält eine Geräteadresse, aber keine Nachrichtentexte. Benötigt HTTPS und einen eingerichteten Push-Server; iPhone: installierte Home-Bildschirm-App.</p>
           </div>
           <div class="setting-group"><h3 data-i18n="presenceTitle">Online-Anzeige</h3><label class="check compact"><input type="checkbox" id="presenceToggle"><span data-i18n="presenceOptIn">Meine Aktivität in Chats anzeigen (freiwillig)</span></label><p class="fineprint" data-i18n="presenceWarning">Nur sichtbar solange Koncha aktiv ist; keine Identitätsprüfung. Der Server sieht den Zeitpunkt.</p></div>
           <div class="setting-group"><h3 data-i18n="translationTitle">Übersetzung</h3><label class="check compact"><input type="checkbox" id="translationToggle"><span data-i18n="translateToggle">Eingehende Nachrichten lokal übersetzen</span></label>

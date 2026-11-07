@@ -91,3 +91,17 @@ Do not commit `var/rooms/*.json`, invitation URLs, exported private keys or chat
 - `public/models/`, `public/vendor/` and `public/local-translation.worker.js`: generated, ignored by Git. Deploy separately after review.
 - `public/protocol-status.js`: explicitly marks missing forward secrecy/security audit, not an E2EE implementation.
 - `docs/SECURITY_PROTOCOL_0_6.md`, `docs/LOCAL_AI_0_6.md`, `docs/PWA_TESTS_0_6.md`: specifications and manual acceptance test plans.
+
+
+## 0.7 incremental files (after 0.6 merged into main)
+
+- `public/push-service.php`: validates recipient push endpoints, builds RFC 8292 VAPID ES256 JWT, sends **empty** Web Push via HTTPS and PHP cURL.
+- `public/push-client.js`: opt-in per-chat push subscription/unsubscription, device feature check and VAPID key validation.
+- `public/api.php`: authenticated `push_config`, `push_subscribe`, `push_unsubscribe`; relay triggers generic push only when a new ciphertext envelope arrives.
+- `public/sw.js`: closed-PWA generic push-notification handler, still no private data in app-shell cache.
+- `scripts/generate-vapid.sh`: creates a server private key outside web root (never Git).
+- `scripts/verify-local-ai.mjs`: validates ONNX asset manifest, SHA-256, runtime presence, paths. Does not test inference.
+- `docs/WEB_PUSH_0_7.md`: server prerequisites and physical iOS/Android acceptance matrix.
+- `.github/workflows/tests.yml`: automated tests on PRs and main.
+
+**0.7 limitation:** no physical device or push-provider delivery test. Existing E2EE still lacks forward secrecy. Real local model inference still needs separately provisioned packages and model weights. Do not call this a final release.

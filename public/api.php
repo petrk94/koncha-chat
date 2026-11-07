@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 // Koncha experimental ciphertext relay. Not production-grade E2EE. See docs/SECURITY.md.
+require_once __DIR__ . '/push-service.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, max-age=0');
 header('X-Content-Type-Options: nosniff');
@@ -64,8 +65,8 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (!in_array($method, ['GET', 'POST'], true)) reply(405, ['error' => 'Method not allowed']);
 if ($method === 'POST' && !str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) reply(415, ['error' => 'Expected application/json']);
 $action = $_GET['action'] ?? '';
-if (!in_array($action, ['init', 'list', 'send', 'invite_create', 'invite_claim', 'invite_revoke', 'invite_status', 'invite_check', 'heartbeat', 'presence'], true)) reply(404, ['error' => 'Unknown action']);
-if ((in_array($action, ['list', 'invite_status', 'presence'], true)) !== ($method === 'GET')) reply(405, ['error' => 'Method not allowed']);
+if (!in_array($action, ['init', 'list', 'send', 'invite_create', 'invite_claim', 'invite_revoke', 'invite_status', 'invite_check', 'heartbeat', 'presence', 'push_config', 'push_subscribe', 'push_unsubscribe'], true)) reply(404, ['error' => 'Unknown action']);
+if ((in_array($action, ['list', 'invite_status', 'presence', 'push_config'], true)) !== ($method === 'GET')) reply(405, ['error' => 'Method not allowed']);
 $body = $method === 'POST' ? postJson() : [];
 $room = $method === 'POST' ? ($body['roomId'] ?? null) : ($_GET['room'] ?? null);
 if (!validRoom($room)) reply(400, ['error' => 'Invalid room']);
@@ -76,12 +77,18 @@ if ($action === 'send' && !validEnvelope($body['envelope'] ?? null)) reply(400, 
 if ($action === 'invite_create' && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null) || !validInvitePayload($body['payload'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
 if ($claim && (!exact($body['inviteId'] ?? null, 22) || !validToken($body['verifier'] ?? null))) reply(400, ['error' => 'Invalid invitation']);
 if ($action === 'heartbeat' && !exact($body['presenceId'] ?? null, 16)) reply(400, ['error' => 'Invalid presence token']);
+if ($action === 'send' && isset($body['senderPresenceId']) && !exact($body['senderPresenceId'], 16)) reply(400, ['error' => 'Invalid sending device']);
+if (in_array($action, ['push_subscribe', 'push_unsubscribe'], true)) {
+    if (!exact($body['deviceId'] ?? null, 16) || !pushEndpointAllowed($body['endpoint'] ?? null)) reply(400, ['error' => 'Invalid push subscription']);
+    if ($action === 'push_subscribe' && (!pushPrivateKey() || !pushSubject() || !function_exists('curl_init'))) reply(503, ['error' => 'Push is not configured']);
+}
 
 // The directory must be OUTSIDE the document root. File locking makes one-time claims atomic.
 $directory = getenv('KONCHA_DATA_DIR') ?: dirname(__DIR__) . '/var/rooms';
 if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) reply(500, ['error' => 'Storage unavailable']);
 $path = rtrim($directory, '/') . '/' . $room . '.json';
 if ($action !== 'init' && !is_file($path)) reply($claim ? 410 : 404, ['error' => $claim ? 'invite_unavailable' : 'Room not found']);
+$pendingPush = [];
 $handle = fopen($path, 'c+');
 if (!$handle) reply(500, ['error' => 'Storage unavailable']);
 @chmod($path, 0600);
@@ -94,12 +101,20 @@ try {
     $modified = false;
     if ($state === null) {
         if ($action !== 'init') reply(404, ['error' => 'Room not found']);
-        $state = ['verifier' => hash('sha256', $token), 'createdAt' => time(), 'messages' => [], 'invite' => null, 'presence' => [], 'claimed' => false];
+        $state = ['verifier' => hash('sha256', $token), 'createdAt' => time(), 'messages' => [], 'invite' => null, 'presence' => [], 'claimed' => false, 'push' => []];
         $modified = true;
     } elseif (!$claim && !hash_equals($state['verifier'], hash('sha256', $token))) {
         reply(403, ['error' => 'Access denied']);
     }
     $modified = cleanMessages($state) || $modified;
+    // Purge subscriptions not refreshed for 30 days (lazy cleanup, no telemetry).
+    $existingPush = $state['push'] ?? [];
+    $state['push'] = array_values(array_filter(is_array($existingPush) ? $existingPush : [], static function($sub) {
+        return is_array($sub) && exact($sub['deviceId'] ?? null, 16)
+          && pushEndpointAllowed($sub['endpoint'] ?? null)
+          && is_int($sub['updatedAt'] ?? null) && $sub['updatedAt'] >= time() - 30 * 86400;
+    }));
+    if ($existingPush !== $state['push']) $modified = true;
     $recent = [];
     foreach ($state['presence'] ?? [] as $id => $seen) {
         if (exact($id, 16) && is_int($seen) && $seen > time() - 70) $recent[$id] = $seen;
@@ -137,6 +152,14 @@ try {
     } elseif ($action === 'invite_revoke') {
         $state['invite'] = null;
         $modified = true;
+    } elseif ($action === 'push_subscribe') {
+        $state['push'] = array_values(array_filter($state['push'], static fn($s) => $s['deviceId'] !== $body['deviceId']));
+        if (count($state['push']) >= 4) reply(429, ['error' => 'Too many devices']);
+        $state['push'][] = [ 'deviceId' => $body['deviceId'], 'endpoint' => $body['endpoint'], 'updatedAt' => time() ];
+        $modified = true;
+    } elseif ($action === 'push_unsubscribe') {
+        $state['push'] = array_values(array_filter($state['push'], static fn($s) => !($s['deviceId'] === $body['deviceId'] && $s['endpoint'] === $body['endpoint'])));
+        $modified = true;
     } elseif ($action === 'heartbeat') {
         $state['presence'][$body['presenceId']] = time();
         // Protect the file-backed demo relay from unbounded presence entries.
@@ -153,6 +176,11 @@ try {
             $envelope['storedAt'] = time();
             $state['messages'][] = $envelope;
             $modified = true;
+            $source = $body['senderPresenceId'] ?? '';
+            // Notification target is device-local opaque id, never a human name.
+            foreach ($state['push'] as $subscription) {
+                if ($subscription['deviceId'] !== $source) $pendingPush[] = $subscription['endpoint'];
+            }
         }
         cleanMessages($state);
     }
@@ -167,8 +195,19 @@ try {
     if ($action === 'invite_status') reply(200, ['expiresAt' => (($state['invite']['expiresAt'] ?? 0) > time()) ? $state['invite']['expiresAt'] : null]);
     if ($action === 'list') reply(200, ['messages' => $state['messages']]);
     if ($action === 'presence') reply(200, ['presence' => $state['presence']]);
-    reply(200, ['ok' => true]);
+    if ($action === 'push_config') {
+        $vapidKey = pushPrivateKey(); $subject = pushSubject();
+        reply(200, ['enabled' => (bool) ($vapidKey && $subject && function_exists('curl_init')), 'publicKey' => ($vapidKey && $subject) ? pushPublicKey($vapidKey) : null]);
+    }
+    if ($action !== 'send') reply(200, ['ok' => true]);
 } finally {
     flock($handle, LOCK_UN);
     fclose($handle);
+}
+
+// Release the file lock BEFORE contacting third-party push infrastructure.
+// Web Push is best-effort. Message delivery must never depend on push success.
+if ($action === 'send') {
+    pushDeliver($pendingPush);
+    reply(200, ['ok' => true]);
 }

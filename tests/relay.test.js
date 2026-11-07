@@ -146,3 +146,19 @@ test('relay accepts an encrypted invitation carrying a P-256 device identity wit
     assert.equal((await call('invite_create','POST',body)).status,409);
   });
 });
+
+test('Web Push endpoint registration is fail-closed without VAPID and never leaks in list responses', async () => {
+  await withServer(async ({ room, call, temp }) => {
+    const config = await (await call('push_config')).json();
+    assert.equal(config.enabled, false);
+    assert.equal(config.publicKey, null);
+    const address = 'https://web.push.apple.com/' + 'n'.repeat(72);
+    assert.equal((await call('push_subscribe', 'POST', {deviceId:'Q'.repeat(16),endpoint:address})).status, 503);
+    assert.equal((await call('push_subscribe', 'POST', {deviceId:'Q'.repeat(16),endpoint:'https://127.0.0.1/LOCAL'})).status, 400);
+    const messages = await (await call('list')).json();
+    assert.equal(JSON.stringify(messages).includes('web.push.apple.com'), false);
+    assert.equal((await call('push_unsubscribe', 'POST', {deviceId:'Q'.repeat(16),endpoint:address})).status, 200);
+    const state = JSON.parse(await readFile(path.join(temp,`${room.roomId}.json`),'utf8'));
+    assert.deepEqual(state.push, []);
+  });
+});

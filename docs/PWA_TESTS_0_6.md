@@ -1,3 +1,5 @@
+> **Version note:** This document describes **0.6**, before Web Push existed. For opt-in 0.7 Web Push, see `docs/WEB_PUSH_0_7.md`. Real device tests remain pending.
+
 # Koncha 0.6 – incremental PWA acceptance tests (manual, real devices outstanding)
 
 Deploy over HTTPS with `public/` as the only document root and `var/rooms/` outside it. Use invented messages; it is NOT approved for confidential communication.

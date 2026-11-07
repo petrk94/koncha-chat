@@ -161,3 +161,29 @@ Object.assign(dictionary.ja, {pwaDiagnosticsTitle:'PWA端末テスト',pwaCheck:
 Object.assign(dictionary.de, {modelConsent:'Das Übersetzungsmodell kann je Sprachpaar mehrere Hundert MB auf dieses Gerät laden. Die Übersetzung erfolgt nur lokal. Fortfahren?'});
 Object.assign(dictionary.en, {modelConsent:'Translation models can download several hundred MB per language pair to your device. Translation stays local. Continue?'});
 Object.assign(dictionary.ja, {modelConsent:'言語ペアごとに数百MBの翻訳モデルを端末にダウンロードする場合があります。翻訳処理は端末内で行われます。続行しますか？'});
+
+Object.assign(dictionary.de, {
+  enableWebPush:'Web Push für diesen Chat aktivieren',
+  disableWebPush:'Web Push für diesen Chat deaktivieren',
+  webPushInfo:'Optional. Push-Dienst und Koncha-Server können Geräteadressen verknüpfen, erhalten jedoch keine Chattexte. HTTPS erforderlich; auf iPhone nur als installierte Home-Bildschirm-App.',
+  webPushEnabled:'Web Push aktiviert. Zustellung hängt vom Browser, Betriebssystem und Push-Server ab.',
+  webPushDisabled:'Web Push für diesen Chat deaktiviert.'
+});
+Object.assign(dictionary.en, {
+  enableWebPush:'Enable Web Push for this chat',
+  disableWebPush:'Disable Web Push for this chat',
+  webPushInfo:'Optional. The server and push provider may correlate device endpoints, but receive no chat text. HTTPS required; on iPhone use an installed Home Screen web app.',
+  webPushEnabled:'Web Push enabled. Delivery depends on browser, OS and push provider.',
+  webPushDisabled:'Web Push disabled for this chat.'
+});
+Object.assign(dictionary.ja, {
+  enableWebPush:'このチャットのWebプッシュを有効にする',
+  disableWebPush:'このチャットのWebプッシュを無効にする',
+  webPushInfo:'任意機能です。プッシュサービスやサーバーが端末の通知先を関連付ける可能性がありますが、チャット本文は送信しません。HTTPSが必要で、iPhoneではホーム画面に追加したアプリで利用します。',
+  webPushEnabled:'Webプッシュを有効にしました。配信はブラウザー、OS、プッシュサービスによります。',
+  webPushDisabled:'このチャットのWebプッシュを無効にしました。'
+});
+
+Object.assign(dictionary.de, {resetPushWarning:'Push-Abmeldung konnte nicht abgeschlossen werden, eventuell wegen fehlender Verbindung. Der Server kann weiterhin generische Benachrichtigungen senden, bis die Anmeldung abläuft. Lokale Daten trotzdem löschen?'});
+Object.assign(dictionary.en, {resetPushWarning:'Push registration could not be removed, possibly because you are offline. The server may still send generic notifications until the registration expires. Delete local data anyway?'});
+Object.assign(dictionary.ja, {resetPushWarning:'プッシュ通知の登録を解除できませんでした（オフラインの可能性があります）。登録期限まで一般的な通知が届くことがあります。それでも端末内のデータを削除しますか？'});
