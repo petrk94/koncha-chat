@@ -1,3 +1,5 @@
+import { localWorkerTranslation } from './local-translation.js';
+
 /**
  * Koncha client-only translation adapter. No plaintext is sent to our relay or a cloud AI.
  * The native Translator API is used where supported. The optional self-hosted
@@ -6,7 +8,8 @@
 export async function browserTranslation({ status = () => {} } = {}) {
   const NativeTranslator = globalThis.Translator;
   if (!NativeTranslator?.availability || !NativeTranslator?.create) {
-    throw new Error('On-device model not installed for this browser');
+    try { return await localWorkerTranslation({ status }); }
+    catch (error) { throw new Error(`On-device model not installed for this browser (${error.message})`); }
   }
   const translators = new Map();
   let disposed = false;

@@ -10,3 +10,6 @@
 
 /tests/__pycache__/
 /artifacts/
+/public/vendor/
+/public/models/
+/public/local-translation.worker.js

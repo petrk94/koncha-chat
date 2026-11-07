@@ -1,7 +1,13 @@
+# Koncha 0.6 development branch
+
+**0.6.0-alpha.1 is a partial implementation, not a secure release.** The 0.5 chat/relay remains experimental without a Double Ratchet or forward secrecy.
+
+This branch adds a network-first offline PWA shell cache (no API/chat storage in the service worker), a device feature report and an optional on-device Transformers.js + ONNX/WASM translation worker. Compiled worker, WASM and model files must be separately provisioned, so local inference is not runnable straight from Git checkout. Real hardware testing has NOT happened here. See `docs/SECURITY_PROTOCOL_0_6.md`, `docs/LOCAL_AI_0_6.md` and `docs/PWA_TESTS_0_6.md`.
+
 # Koncha — private intercultural messenger (experimental)
 
-**Current feature branch:** `feat/device-identity-multiroom-presence`  
-**Candidate version:** `0.5.0-alpha.1`  
+**Current feature branch:** `feat/device-identity-multiroom-presence`
+**Candidate version:** `0.6.0-alpha.1`
 **Status:** For testing with invented messages only. **Not audited secure E2EE.**
 
 Koncha is a from-scratch browser/PWA messenger with a small PHP ciphertext relay. It is not a fork of SimpleX or Signal and does not implement SMP or Double Ratchet. The project is copyrighted by Kirpeit Solutions; see [LICENSE.md](LICENSE.md).

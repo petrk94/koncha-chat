@@ -6,7 +6,7 @@
 - Git's repository root is **not** the PHP `public/` directory; use `git rev-parse --show-toplevel`.
 - Recommended permanent local folder: `~/Projekte/koncha-chat`. Avoid working from versioned ZIP extraction folders in `~/Downloads/`.
 - `main` is only the latest **merged** version. Feature branches are work in progress until merged.
-- PR #2 merged Koncha 0.4 into main. Koncha 0.5 is developed in branch `feat/device-identity-multiroom-presence`; do not assume it is merged until verified on GitHub.
+- PR #3 merged Koncha 0.5 into main. Koncha 0.6 is developed in branch `feat/local-ai-pwa-security-migration`; do not assume it is merged until verified on GitHub.
 - The original `~/Downloads/koncha-chat-github-ready/koncha-chat` is the older scaffold (before v0.2) unless you explicitly run `git fetch` and switch branches. It must not be mistaken for the latest source.
 
 ## Important commands
@@ -78,3 +78,16 @@ Always confirm GitHub status before claiming any new merge or deployed release.
 | `scripts/publish-pr-0.5.sh` | GitHub-CLI branch publishing helper if GitHub connector denies writes |
 
 Do not commit `var/rooms/*.json`, invitation URLs, exported private keys or chat content.
+
+
+## 0.6 working files
+
+- `public/sw.js`: offline app-shell cache; excludes `api.php` and model files.
+- `public/pwa-diagnostics.js`: PWA feature report.
+- `public/local-translation.js`: local worker transport.
+- `src/local-translation.worker.js`: optional ONNX/WASM inference source.
+- `scripts/build-local-ai.mjs`: optional on-device translation build (npm dependencies required).
+- `scripts/prepare-models.py`: optional model provisioning on the developer machine.
+- `public/models/`, `public/vendor/` and `public/local-translation.worker.js`: generated, ignored by Git. Deploy separately after review.
+- `public/protocol-status.js`: explicitly marks missing forward secrecy/security audit, not an E2EE implementation.
+- `docs/SECURITY_PROTOCOL_0_6.md`, `docs/LOCAL_AI_0_6.md`, `docs/PWA_TESTS_0_6.md`: specifications and manual acceptance test plans.

@@ -153,3 +153,11 @@ Object.assign(dictionary.ja, {
   serverText:'テスト中継サーバーには部屋ID、暗号文、時刻を保存します。メッセージは最大7日間で、次のアクセス時に削除されます。ログやバックアップは長く残る可能性があります。',
   inviteAlreadyJoined:'この部屋には既に相手がいます。別の相手には新しいチャットを作成してください。'
 });
+
+Object.assign(dictionary.de, {pwaDiagnosticsTitle:'PWA-Gerätetest',pwaCheck:'Gerät prüfen',pwaCaution:'Erkennung ist kein Gerätetest. Push bei geschlossener App ist noch nicht aktiv.',localAIInstalled:'Lokale Modelle bereitgestellt'});
+Object.assign(dictionary.en, {pwaDiagnosticsTitle:'PWA device check',pwaCheck:'Check device',pwaCaution:'Feature detection is not a device test. Push while closed is not yet enabled.',localAIInstalled:'Local models provisioned'});
+Object.assign(dictionary.ja, {pwaDiagnosticsTitle:'PWA端末テスト',pwaCheck:'端末を確認',pwaCaution:'機能の検出は実機テストではありません。終了後のプッシュ通知は未対応です。',localAIInstalled:'ローカルモデルの準備済み'});
+
+Object.assign(dictionary.de, {modelConsent:'Das Übersetzungsmodell kann je Sprachpaar mehrere Hundert MB auf dieses Gerät laden. Die Übersetzung erfolgt nur lokal. Fortfahren?'});
+Object.assign(dictionary.en, {modelConsent:'Translation models can download several hundred MB per language pair to your device. Translation stays local. Continue?'});
+Object.assign(dictionary.ja, {modelConsent:'言語ペアごとに数百MBの翻訳モデルを端末にダウンロードする場合があります。翻訳処理は端末内で行われます。続行しますか？'});
