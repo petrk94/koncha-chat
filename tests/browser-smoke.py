@@ -50,6 +50,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#chatPreferences').wait_for(state='visible')
             assert pagea.locator('#messages').bounding_box()['height'] > 400, 'Settings must not shrink chat log'
             pagea.locator('#shareBtn').click()
+            pagea.wait_for_function("async () => (await navigator.clipboard.readText()).includes('handle=alex.becker')", timeout=12000)
             invite = pagea.evaluate('navigator.clipboard.readText()')
             assert 'from=Alex' in invite and 'handle=alex.becker' in invite
             pageb.goto(invite)
@@ -97,6 +98,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pagea.locator('#chat').wait_for(state='visible')
             pagea.locator('#settingsBtn').click()
             pagea.locator('#shareBtn').click()
+            pagea.wait_for_function("async old => { const next=await navigator.clipboard.readText(); return next !== old && next.includes('handle=alex.becker'); }", arg=invite, timeout=12000)
             second_invite = pagea.evaluate('navigator.clipboard.readText()')
             assert second_invite != invite
             pagec_context = browser.new_context(permissions=['clipboard-read','clipboard-write'])
