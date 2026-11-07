@@ -56,3 +56,13 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - Do not prompt for OS notification permission automatically on page load. Ask within a direct user gesture only. Audio is best effort and subject to browser activation/throttling.
 - Preserve `public/sw.js` as a minimal notification-only worker with NO interception/caching of app JS, crypto keys, or messages.
 - Keep the permanent workspace documented in `docs/WORKSPACE.md` and the diagnostics in `scripts/doctor.sh`.
+
+## v0.5 boundaries for agents/Codex
+
+- A manually pinned ECDSA P-256 fingerprint authenticates only the compared device key, never the real-world user. Avoid security "verified" claims without out-of-band comparison.
+- Do not implement a proprietary Double Ratchet or claim forward secrecy without a vetted browser-compatible audited library and peer review.
+- All new rooms require signed messages; legacy unsigned messages must be clearly marked or rejected. Preserve per-room unique keys.
+- Do not upload contact aliases, private keys, room secrets, invitation links or raw chat texts to GitHub, logs, telemetry or translation APIs.
+- Presence is opt-in, pseudonymous per room and must expire rapidly; do not claim it is a trustworthy human online status.
+- The relay is an expiring ciphertext mailbox, not a reliable message broker; seven-day TTL is not a delivery guarantee.
+- Do not claim iOS/Android PWA push or WebGPU model translation is implemented before real physical tests and deployment integration.

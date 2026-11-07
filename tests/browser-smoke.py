@@ -85,9 +85,37 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             assert pagea.locator('link[rel=icon]').get_attribute('href').startswith('data:image/svg+xml,')
             pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))")
             pagea.wait_for_function("!document.title.startsWith('(')", timeout=4000)
-            pagea.screenshot(path='/mnt/data/koncha-desktop-0.3-preview.png')
-            pageb.screenshot(path='/mnt/data/koncha-mobile-0.3-preview.png')
-            print('PASS: inviter and invitee onboarding, settings overlay, messages and romaji')
+            # 0.5 multi-room integration: inviter can open a second independent chat.
+            pagea.locator('#leaveBtn').click()
+            pagea.locator('#lobby').wait_for(state='visible')
+            assert pagea.locator('#savedRooms .saved-row').count() == 1
+            pagea.locator('#createBtn').click()
+            pagea.locator('#chat').wait_for(state='visible')
+            pagea.locator('#settingsBtn').click()
+            pagea.locator('#shareBtn').click()
+            second_invite = pagea.evaluate('navigator.clipboard.readText()')
+            assert second_invite != invite
+            pagec_context = browser.new_context(permissions=['clipboard-read','clipboard-write'])
+            pagec_context.route('**/*', forward)
+            pagec = pagec_context.new_page()
+            pagec.goto(second_invite)
+            assert pagec.locator('#inviterName').inner_text() == 'Alex Becker'
+            pagec.locator('#joinBtn').click()
+            pagec.locator('#nickname').fill('Mika Mori')
+            pagec.locator('#handle').fill('mika.mori')
+            pagec.locator('#ack').check()
+            pagec.locator('#startBtn').click()
+            pagec.locator('#chat').wait_for(state='visible')
+            pagec.locator('#messageInput').fill('Third contact, separate room')
+            pagec.locator('#sendBtn').click()
+            pagea.locator('#closePreferences').click()
+            pagea.locator('.bodytext').filter(has_text='Third contact, separate room').wait_for(timeout=10000)
+            pagea.locator('#leaveBtn').click()
+            pagea.locator('#lobby').wait_for(state='visible')
+            assert pagea.locator('#savedRooms .saved-row').count() == 2
+            assert pagea.locator('#savedRooms .saved-row').first.inner_text().strip()
+
+            print('PASS: invitation, signed messages, separate persistent rooms, hidden-tab attention')
             browser.close()
     finally:
         p.terminate(); p.wait(timeout=5)

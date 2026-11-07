@@ -6,7 +6,7 @@
 - Git's repository root is **not** the PHP `public/` directory; use `git rev-parse --show-toplevel`.
 - Recommended permanent local folder: `~/Projekte/koncha-chat`. Avoid working from versioned ZIP extraction folders in `~/Downloads/`.
 - `main` is only the latest **merged** version. Feature branches are work in progress until merged.
-- Branch `feat/notifications-and-workspace` builds **on top of** the unmerged `feat/chat-clarity-personal-invitations` changes (Koncha 0.3). A PR from it to `main` intentionally includes both UI/invite and notification improvements.
+- PR #2 merged Koncha 0.4 into main. Koncha 0.5 is developed in branch `feat/device-identity-multiroom-presence`; do not assume it is merged until verified on GitHub.
 - The original `~/Downloads/koncha-chat-github-ready/koncha-chat` is the older scaffold (before v0.2) unless you explicitly run `git fetch` and switch branches. It must not be mistaken for the latest source.
 
 ## Important commands
@@ -60,8 +60,21 @@ If you have modified tracked files, inspect `git status` first and commit/stash 
 
 ## Version progression
 
-- v0.2.0-alpha.1 merged as PR #1 into main on 2026-11-07.
-- v0.3.0-alpha.1 chat-first UI/personal invitation branch was prepared but had not merged when this package was built.
-- v0.4.0-alpha.1 notification changes live on top of that v0.3 branch in this deliverable.
+- v0.2.0-alpha.1 merged as PR #1 on 2026-11-07.
+- v0.3 UI and v0.4 notifications merged together as PR #2 on 2026-11-07.
+- v0.5.0-alpha.1 device identities, multiple rooms, presence and offline mailbox are in a new feature branch until PR merge.
 
 Always confirm GitHub status before claiming any new merge or deployed release.
+
+## 0.5 source additions
+
+| Path | Purpose |
+| --- | --- |
+| `public/identity.js` | Non-extractable local P-256 private key, signature verification, device fingerprints |
+| `public/rooms.js` | Local deduplicated room index |
+| `public/translation-capabilities.js` | Browser-local native API / WebGPU / WASM availability probe; no model included |
+| `docs/SECURITY_0_5.md` | Threat model, security claims and missing audited E2EE |
+| `docs/PWA_DEVICE_TESTS.md` | Incremental iPhone / Android physical acceptance matrix |
+| `scripts/publish-pr-0.5.sh` | GitHub-CLI branch publishing helper if GitHub connector denies writes |
+
+Do not commit `var/rooms/*.json`, invitation URLs, exported private keys or chat content.

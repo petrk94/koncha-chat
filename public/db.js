@@ -1,13 +1,15 @@
 const DB_NAME = 'koncha-prototype';
 const STORE = 'settings';
 const MESSAGES = 'messages';
+const NONCES = 'messageNonces';
 let dbPromise;
 function open() {
   if (!dbPromise) dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE);
-      req.result.createObjectStore(MESSAGES, { keyPath: 'key' });
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+      if (!req.result.objectStoreNames.contains(MESSAGES)) req.result.createObjectStore(MESSAGES, { keyPath: 'key' });
+      if (!req.result.objectStoreNames.contains(NONCES)) req.result.createObjectStore(NONCES);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -57,5 +59,29 @@ export async function resetAll() {
     req.onsuccess = resolve;
     req.onerror = () => reject(req.error);
     req.onblocked = () => reject(new Error('Close other open Koncha tabs first'));
+  });
+}
+
+/** One IndexedDB transaction for replay protection and ciphertext persistence.
+ * A replayed signed nonce, even with a fresh outer envelope ID, is not stored.
+ */
+export async function putVerifiedMessage(roomId, envelope, senderId, nonce) {
+  if (!roomId || !senderId || !/^[A-Za-z0-9_-]{16,64}$/.test(nonce || '')) throw new Error('Invalid replay identifier');
+  const db = await open();
+  const key = JSON.stringify([roomId, senderId, nonce]);
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([NONCES, MESSAGES], 'readwrite');
+    let accepted = false;
+    const req = tx.objectStore(NONCES).add(1, key);
+    req.onsuccess = () => {
+      tx.objectStore(MESSAGES).put({ key: `${roomId}:${envelope.id}`, roomId, envelope });
+      accepted = true;
+    };
+    req.onerror = event => {
+      if (req.error?.name === 'ConstraintError') event.preventDefault();
+    };
+    tx.oncomplete = () => resolve(accepted);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('IDB transaction aborted'));
   });
 }
