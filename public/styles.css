@@ -26,3 +26,5 @@
 
 .room-list .room-row{background:transparent;border-left:2px solid transparent}
 .room-list .room-row[aria-current="true"]{background:#293531;border-left-color:var(--accent)}
+
+.device-report{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted,#707778);padding:12px 0;margin:8px 0}

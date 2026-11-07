@@ -54,7 +54,7 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - Decrypted chat text and peer identities must never appear in OS notifications, push payloads, favicon/title, logs or badge metadata.
 - The currently implemented notifications only work while a browser tab/PWA remains running. Never claim closed-app background Web Push works; it needs an authenticated subscription and separate server design.
 - Do not prompt for OS notification permission automatically on page load. Ask within a direct user gesture only. Audio is best effort and subject to browser activation/throttling.
-- Preserve `public/sw.js` as a minimal notification-only worker with NO interception/caching of app JS, crypto keys, or messages.
+- In 0.6, `public/sw.js` caches ONLY the static app shell for offline opening. NEVER cache `/api.php`, model weights, keys, chat plaintext or relay responses. Network-first static assets are required to avoid obsolete cryptography code.
 - Keep the permanent workspace documented in `docs/WORKSPACE.md` and the diagnostics in `scripts/doctor.sh`.
 
 ## v0.5 boundaries for agents/Codex
@@ -66,3 +66,10 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - Presence is opt-in, pseudonymous per room and must expire rapidly; do not claim it is a trustworthy human online status.
 - The relay is an expiring ciphertext mailbox, not a reliable message broker; seven-day TTL is not a delivery guarantee.
 - Do not claim iOS/Android PWA push or WebGPU model translation is implemented before real physical tests and deployment integration.
+
+## 0.6 partial security/AI/PWA boundaries
+
+- `src/local-translation.worker.js` executes on-device only. Run `npm run ai:build` and provision model weights before claiming inference; no models are distributed in Git. No outgoing plaintext HTTP calls or remote model loading.
+- `docs/SECURITY_PROTOCOL_0_6.md` is a **migration specification, not the implementation of audited Double Ratchet E2EE**. Never label 0.6 production secure.
+- The service worker caches only network-first app shell assets. Keep the server API uncacheable and never cache private data.
+- Physical iOS/Android testing and closed-PWA push remain unperformed, regardless of capability flags.

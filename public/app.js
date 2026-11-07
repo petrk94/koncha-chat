@@ -6,6 +6,7 @@ import { romanizeKana } from './romanize.js';
 import { getSetting, putSetting, putMessage, getMessages, resetAll, putVerifiedMessage } from './db.js';
 import { applyLanguage, translate } from './i18n.js';
 import { browserTranslation } from './translation.js';
+import { pwaFeatureReport, formatPwaReport } from './pwa-diagnostics.js';
 import { AttentionController } from './notifications.js';
 import { generateDeviceKeyPair, exportDevicePublicKey, deviceFingerprint, signChatPayload } from './identity.js';
 import { authenticateRoomMessage } from './message-policy.js';
@@ -177,6 +178,11 @@ function setLanguage(lang) {
   if (room) { $('connection').textContent = t('presenceUnknown'); updateConversation(); void renderMessages(); }
   if (pendingInvite && !$('invitation').hidden) $('inviteDescription').textContent = pendingInvite.sender ? t('inviteFromDescription') : t('invitePageLead');
 }
+function registerAppShell() {
+  if ('serviceWorker' in navigator && globalThis.isSecureContext) {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  }
+}
 function preferredLanguage() {
   for (const item of navigator.languages || [navigator.language]) {
     const code = String(item).split('-')[0].toLowerCase();
@@ -271,7 +277,11 @@ async function openRoom(next) {
   room = next;
   if (!room.presenceId) room.presenceId = randomId(12);
   keys = await deriveRoomKeys(room);
-  await api('init', { method: 'POST' });
+  // Saved conversations remain readable from IndexedDB without a network.
+  // New rooms still require the relay to initialize successfully.
+  const alreadySaved = rooms.some(item => item.roomId === room.roomId);
+  try { await api('init', { method: 'POST' }); }
+  catch (error) { if (!alreadySaved) throw error; }
   await saveRoomRecord(room);
   lastErrorShown = false;
   activeInvite = null;
@@ -428,6 +438,8 @@ async function enableTranslation() {
   if (from === to) { toast(t('chooseDifferent')); $('translationToggle').checked = false; return; }
   $('translationStatus').textContent = t('translationDownload');
   try {
+    const caps = await translationCapabilities();
+    if (!caps.native && caps.localModelBundled && !confirm(t('modelConsent'))) throw new Error('Model download declined');
     const session = await browserTranslation({ status: text => { $('translationStatus').textContent = text; } });
     await session.prepare(from, to);
     if (!$('translationToggle').checked) { session.dispose(); return; }
@@ -527,7 +539,10 @@ $('verifyPeerBtn').addEventListener('click', async () => {
 });
 $('checkTranslationBtn').addEventListener('click', async () => {
   const info = await translationCapabilities();
-  $('translationCapability').textContent = info.native ? t('localAINative') : info.webGPU ? t('localAIGPUUnconfigured') : info.wasm ? t('localAIWASMUnconfigured') : t('localAIUnavailable');
+  $('translationCapability').textContent = info.native ? t('localAINative') : info.localModelBundled ? `${t('localAIInstalled')}: ${info.installedPairs.join(', ')}` : info.webGPU ? t('localAIGPUUnconfigured') : info.wasm ? t('localAIWASMUnconfigured') : t('localAIUnavailable');
+});
+$('pwaCheckBtn').addEventListener('click', () => {
+  $('pwaReport').textContent = formatPwaReport(pwaFeatureReport(), locale);
 });
 $('languageSelect').addEventListener('change', async () => { setLanguage($('languageSelect').value); await putSetting('locale', locale); });
 $('startBtn').addEventListener('click', async () => {
@@ -539,6 +554,7 @@ $('startBtn').addEventListener('click', async () => {
     if (!/^[a-z][a-z0-9._-]{2,23}$/.test(handle)) return toast(t('invalidHandle'));
     identity = { id: randomId(16), alias: alias.slice(0, 32), handle };
     await putSetting('consent', true); await putSetting('identity', identity);
+    registerAppShell();
     await initializeDeviceKey();
     if (invitationAccepted && pendingInvite) await claimPendingInvite();
     else showLobby();
@@ -642,6 +658,7 @@ $('resetBtn').addEventListener('click', async () => {
     const [consent, existing, savedLocale, soundSetting] = await Promise.all([
       getSetting('consent'), getSetting('identity'), getSetting('locale'), getSetting('alertSound')
     ]);
+    if (consent) registerAppShell();
     $('soundToggle').checked = soundSetting !== false;
     attention.setSound($('soundToggle').checked);
     setLanguage(savedLocale || preferredLanguage());
