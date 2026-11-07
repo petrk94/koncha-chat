@@ -29,9 +29,13 @@ jobs:
       - run: node scripts/olm-wasm-probe.mjs
 
   local-ai-real-inference:
-    name: Real ONNX inference on CI (DE → EN; NOT a mobile test)
+    name: Real ONNX inference in CI (${{ matrix.pair }}; NOT a mobile test)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        pair: [de-en, en-de, ja-en, en-ja]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,9 +47,9 @@ jobs:
       - run: npm install --no-package-lock
       - run: python -m pip install 'huggingface_hub>=0.27,<2'
       - run: npm run ai:build
-      - run: python scripts/prepare-models.py de-en
+      - run: python scripts/prepare-models.py ${{ matrix.pair }}
       - run: npm run ai:verify
-      - run: node scripts/real-model-inference.mjs de-en
+      - run: node scripts/real-model-inference.mjs ${{ matrix.pair }}
       # No chat data or proprietary content is involved.
 
   cross-engine-pwa:
