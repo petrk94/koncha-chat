@@ -67,7 +67,14 @@ export async function sealInvite(invite, room) {
   if (invite.roomId !== room.roomId) throw new Error('Wrong room');
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
   const key = await inviteKey(invite);
-  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret, sender: invite.sender || '', handle: invite.handle || '', publicKey: invite.publicKey || null, presenceId: invite.presenceId || '', requireSignatures: room.requireSignatures === true })));
+  if (room.protocol && room.protocol !== 'koncha-olm-v1') throw new Error('Unknown invitation protocol');
+  if (room.protocol === 'koncha-olm-v1') {
+    const k=room.olmInvitation;
+    if (!k || !['curve','ed','oneTimeKey'].every(field => typeof k[field]==='string' && k[field].length>=43 && k[field].length<=44))
+      throw new Error('Secure prekey missing');
+  }
+  const ciphertext = await cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ roomId: room.roomId, secret: room.secret, sender: invite.sender || '', handle: invite.handle || '', publicKey: invite.publicKey || null, presenceId: invite.presenceId || '', requireSignatures: room.requireSignatures === true,
+    ...(room.protocol === 'koncha-olm-v1' ? {protocol:'koncha-olm-v1',olmInvitation:room.olmInvitation} : {}) })));
   return { iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(ciphertext)) };
 }
 export async function unsealInvite(invite, payload) {
@@ -79,7 +86,14 @@ export async function unsealInvite(invite, payload) {
   if (room.roomId !== invite.roomId || b64uDecode(room.secret).length !== 32) throw new Error('Invalid invite payload');
   // A modified preview name must never silently become an accepted chat identity.
   if ((invite.sender || '') !== (room.sender || '') || (invite.handle || '') !== (room.handle || '')) throw new Error('invite_identity_mismatch');
-  return room.sender ? { roomId: room.roomId, secret: room.secret, ...(room.requireSignatures ? { requireSignatures: true } : {}), peer: { alias: room.sender, handle: room.handle || '', publicKey: room.publicKey || null, presenceId: room.presenceId || '', verified: false } } : { roomId: room.roomId, secret: room.secret, ...(room.requireSignatures ? { requireSignatures: true } : {}) };
+  if (room.protocol && room.protocol !== 'koncha-olm-v1') throw new Error('Unknown room protocol');
+  if (room.protocol === 'koncha-olm-v1' && (!room.olmInvitation || !['curve','ed','oneTimeKey'].every(k => typeof room.olmInvitation[k] === 'string' && room.olmInvitation[k].length >= 43 && room.olmInvitation[k].length <= 44)))
+    throw new Error('Invalid Olm invitation identity');
+  const base={roomId:room.roomId,secret:room.secret,
+    ...(room.requireSignatures ? {requireSignatures:true} : {}),
+    ...(room.protocol === 'koncha-olm-v1' ? {protocol:'koncha-olm-v1',olmInvitation:room.olmInvitation} : {})};
+  if (room.sender) base.peer={alias:room.sender,handle:room.handle||'',publicKey:room.publicKey||null,presenceId:room.presenceId||'',verified:false};
+  return base;
 }
 export async function deriveRoomKeys(room) {
   const raw = b64uDecode(room.secret);
