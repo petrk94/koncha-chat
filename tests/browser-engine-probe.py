@@ -37,9 +37,18 @@ with tempfile.TemporaryDirectory(prefix="koncha-pwa-probe-") as tmp:
                     page.goto(URL, wait_until="domcontentloaded", timeout=20000)
                     page.locator("#nickname").wait_for(state="visible", timeout=10000)
                     assert page.locator("#startBtn").count() == 1, engine
+                    # Koncha deliberately registers the SW only after storage consent.
+                    page.locator("#nickname").fill("Koncha Test")
+                    page.locator("#handle").fill("test." + engine)
+                    page.locator("#ack").check()
+                    page.locator("#startBtn").click()
+                    page.locator("#lobby").wait_for(state="visible", timeout=10000)
                     report = page.evaluate("""async () => {
                       if (!('serviceWorker' in navigator)) return { supported:false };
-                      await navigator.serviceWorker.ready;
+                      await Promise.race([
+                        navigator.serviceWorker.ready,
+                        new Promise((_,reject) => setTimeout(() => reject(new Error('SW registration timeout')), 12000))
+                      ]);
                       let keys = await caches.keys();
                       let shell = keys.find(k => k.startsWith('koncha-shell-'));
                       if (!shell) return { supported:true, cached:false };
