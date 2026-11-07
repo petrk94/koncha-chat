@@ -3,9 +3,11 @@ on:
   pull_request:
     paths:
       - 'scripts/olm-wasm-probe.mjs'
+      - 'tests/rust-e2ee-smoke/**'
       - 'scripts/real-model-inference.mjs'
       - 'tests/browser-smoke.py'
       - 'tests/browser-engine-probe.py'
+      - 'tests/browser-local-ai.py'
       - 'public/app.js'
       - 'public/translation-selftest.js'
       - 'tests/translation-selftest.test.js'
@@ -28,9 +30,18 @@ jobs:
       - run: npm install --no-save --no-package-lock @matrix-org/matrix-sdk-crypto-wasm@19.0.0
       - run: node scripts/olm-wasm-probe.mjs
 
+  upstream-olm-ratchet-proof:
+    name: Audited Rust Olm handshake + ratcheted messages (not Koncha transport)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run pinned vodozemac Double Ratchet proof
+        run: cargo run --manifest-path tests/rust-e2ee-smoke/Cargo.toml --release
+
   local-ai-real-inference:
     name: Real ONNX inference in CI (${{ matrix.pair }}; NOT a mobile test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -50,6 +61,12 @@ jobs:
       - run: python scripts/prepare-models.py ${{ matrix.pair }}
       - run: npm run ai:verify
       - run: node scripts/real-model-inference.mjs ${{ matrix.pair }}
+      - name: In-browser WASM translation (de-en only)
+        if: matrix.pair == 'de-en'
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          python tests/browser-local-ai.py
       # No chat data or proprietary content is involved.
 
   cross-engine-pwa:
