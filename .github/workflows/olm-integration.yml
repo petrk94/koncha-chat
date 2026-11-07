@@ -38,6 +38,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify actual vodozemac WASM Olm ratchet
         run: python tests/olm-wasm-browser.py
+      - name: Two-browser Koncha Olm invite, reply and restart
+        run: python tests/secure-chat-browser.py
       - name: Run existing Node/PHP regressions
         run: npm test
       - uses: actions/upload-artifact@v4
