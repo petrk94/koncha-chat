@@ -1,0 +1,9 @@
+[package]
+name = "koncha-olm-ratchet-proof"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[dependencies]
+vodozemac = "=0.11.1"
+anyhow = "=1.0.100"
