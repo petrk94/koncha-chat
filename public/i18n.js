@@ -187,3 +187,19 @@ Object.assign(dictionary.ja, {
 Object.assign(dictionary.de, {resetPushWarning:'Push-Abmeldung konnte nicht abgeschlossen werden, eventuell wegen fehlender Verbindung. Der Server kann weiterhin generische Benachrichtigungen senden, bis die Anmeldung abläuft. Lokale Daten trotzdem löschen?'});
 Object.assign(dictionary.en, {resetPushWarning:'Push registration could not be removed, possibly because you are offline. The server may still send generic notifications until the registration expires. Delete local data anyway?'});
 Object.assign(dictionary.ja, {resetPushWarning:'プッシュ通知の登録を解除できませんでした（オフラインの可能性があります）。登録期限まで一般的な通知が届くことがあります。それでも端末内のデータを削除しますか？'});
+
+Object.assign(dictionary.de, {
+  olmActive:'Olm-Ratchet · Sicherheitscode vergleichen',
+  olmLegacy:'Altformat · keine Forward Secrecy',
+  olmNotAudited:'Die neue Olm-Sitzung ist nicht unabhängig geprüft. Vergleiche den Gerätecode über einen zweiten Kanal.'
+});
+Object.assign(dictionary.en, {
+  olmActive:'Olm ratchet · compare safety codes',
+  olmLegacy:'Legacy protocol · no forward secrecy',
+  olmNotAudited:'The new Olm session has not been independently audited. Compare device codes over another channel.'
+});
+Object.assign(dictionary.ja, {
+  olmActive:'Olm ラチェット · 安全確認コードを比較',
+  olmLegacy:'旧方式 · 前方秘匿性なし',
+  olmNotAudited:'新しい Olm セッションは独立した監査を受けていません。別の連絡手段で端末の安全確認コードを照合してください。'
+});
