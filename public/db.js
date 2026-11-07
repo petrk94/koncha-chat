@@ -51,6 +51,10 @@ export async function getMessages(roomId) {
   });
 }
 export async function resetAll() {
+  // Delete encrypted ratchet state before the legacy database. Lost Olm state
+  // cannot be restored from ciphertext stored by the relay.
+  const { clearOlmStore } = await import('./olm-store.js');
+  await clearOlmStore();
   const db = await open();
   db.close();
   dbPromise = null;
