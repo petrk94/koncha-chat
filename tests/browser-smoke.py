@@ -78,6 +78,9 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pageb.locator('#startBtn').click()
             pageb.locator('#chat').wait_for(state='visible')
             assert pageb.locator('#contactName').inner_text() == 'Alex Becker'
+            # New Olm rooms need an authenticated inbound prekey handshake before
+            # the inviter can send. Never paper over it with legacy AES.
+            wait_js(pagea, "() => document.querySelector('#contactName').textContent === 'ゆき 田中'", timeout_ms=30000)
             pagea.locator('#closePreferences').click()
             pagea.locator('#messageInput').fill('こんにちは！')
             pagea.locator('#sendBtn').click()
