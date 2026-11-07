@@ -68,6 +68,37 @@ Object.assign(dictionary.ja, {
   invalidHandle:'ユーザー名は英字で始まる3～24文字で、英小文字・数字・ピリオド・ハイフン・アンダースコアのみ使用できます。',
   identityMismatch:'招待者の情報が一致しません。信頼できる方法で新しいリンクを依頼してください。'
 });
+// Alerts contain no message text or sender identity, including on lock screens.
+Object.assign(dictionary.de, {
+  alertSettingsTitle:'Benachrichtigungen', soundSetting:'Ton bei neuen Nachrichten im Hintergrund',
+  enableNotifications:'Systembenachrichtigungen aktivieren',
+  notificationsHint:'Nur solange Koncha geöffnet bleibt. Browserfreigabe erforderlich.',
+  pushNotYet:'Keine Benachrichtigungen bei vollständig geschlossener App (Web Push folgt später).',
+  notificationsReady:'Systembenachrichtigungen erlaubt. Nur bei geöffnetem Tab.',
+  notificationsDenied:'Vom Browser blockiert. Bitte in den Website-Einstellungen freigeben.',
+  notificationsUnavailable:'Auf diesem Gerät derzeit nicht verfügbar.',
+  notificationTitle:'Neue Koncha-Nachricht', notificationBody:'Öffne Koncha, um die Nachricht zu lesen.'
+});
+Object.assign(dictionary.en, {
+  alertSettingsTitle:'Notifications', soundSetting:'Play a sound for new messages in the background',
+  enableNotifications:'Enable system notifications',
+  notificationsHint:'Only while Koncha remains open. Browser permission required.',
+  pushNotYet:'No notifications when the app is fully closed (Web Push is planned).',
+  notificationsReady:'System notifications enabled. Only while the tab remains open.',
+  notificationsDenied:'Blocked by your browser. Change permission in site settings.',
+  notificationsUnavailable:'Not currently available on this device.',
+  notificationTitle:'New Koncha message', notificationBody:'Open Koncha to read the message.'
+});
+Object.assign(dictionary.ja, {
+  alertSettingsTitle:'通知', soundSetting:'バックグラウンドで新着メッセージの音を鳴らす',
+  enableNotifications:'システム通知を有効にする',
+  notificationsHint:'Konchaを開いている間のみ。ブラウザーの許可が必要です。',
+  pushNotYet:'アプリを完全に閉じた後のプッシュ通知は未対応です。',
+  notificationsReady:'通知を許可しました。タブが開いている間のみ有効です。',
+  notificationsDenied:'ブラウザーで拒否されています。サイト設定を変更してください。',
+  notificationsUnavailable:'この端末では利用できません。',
+  notificationTitle:'Konchaの新着メッセージ', notificationBody:'Konchaを開いてメッセージを確認してください。'
+});
 export function translate(key, language = 'de') {
   return dictionary[language]?.[key] || dictionary.en[key] || key;
 }

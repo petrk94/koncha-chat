@@ -77,6 +77,14 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             pageb.locator('#messageInput').press('Enter')
             pagea.locator('.bodytext').filter(has_text='Hi from another browser').wait_for(timeout=10000)
             assert pagea.locator('#contactName').inner_text() == 'ゆき 田中'
+            # Simulate a hidden desktop tab (the browser OS decides actual visibility).
+            pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:true})")
+            pageb.locator('#messageInput').fill('Message while other tab is hidden')
+            pageb.locator('#sendBtn').click()
+            pagea.wait_for_function("document.title.startsWith('(1)')", timeout=10000)
+            assert pagea.locator('link[rel=icon]').get_attribute('href').startswith('data:image/svg+xml,')
+            pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))")
+            pagea.wait_for_function("!document.title.startsWith('(')", timeout=4000)
             pagea.screenshot(path='/mnt/data/koncha-desktop-0.3-preview.png')
             pageb.screenshot(path='/mnt/data/koncha-mobile-0.3-preview.png')
             print('PASS: inviter and invitee onboarding, settings overlay, messages and romaji')

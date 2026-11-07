@@ -48,3 +48,9 @@
 - Device testing on Android and iOS using HTTPS and PWA installation.
 - OS storage eviction, background behavior and notification design.
 - Security review, release/versioning, privacy law and license review.
+
+## 0.4 follow-up: Web Push for CLOSED PWA [not implemented]
+
+- v0.4 open-tab alerts (sound, favicon/title count, app badge, optional generic OS notice) implemented and tested.
+- For closed-app notifications: define subscriptions and authenticated device binding; implement service-worker `push` event and server-side VAPID Web Push; include unsubscribe, multi-device, expiration, rate limits and traffic-analysis mitigation.
+- Web Push payload must not contain decrypted chat content, peer identity or message keys. Review metadata/privacy impact and test on real iOS Home Screen PWA and Android installed PWA.

@@ -48,3 +48,11 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - An invitation's name and handle are **self-declared, not authenticated**. Never add a verified checkmark or impersonation-resistant claim until a reviewed device-key identity protocol exists.
 - Avoid leaking invite secrets, room keys or plaintext messages to analytics, server logs, remote translation APIs or third-party assets.
 - Preserve localized DE/EN/JA UI, Enter-to-send with Japanese IME guard, compact mobile keyboard-safe composer and the 60-minute one-time invite behavior.
+
+## Notifications (0.4)
+
+- Decrypted chat text and peer identities must never appear in OS notifications, push payloads, favicon/title, logs or badge metadata.
+- The currently implemented notifications only work while a browser tab/PWA remains running. Never claim closed-app background Web Push works; it needs an authenticated subscription and separate server design.
+- Do not prompt for OS notification permission automatically on page load. Ask within a direct user gesture only. Audio is best effort and subject to browser activation/throttling.
+- Preserve `public/sw.js` as a minimal notification-only worker with NO interception/caching of app JS, crypto keys, or messages.
+- Keep the permanent workspace documented in `docs/WORKSPACE.md` and the diagnostics in `scripts/doctor.sh`.

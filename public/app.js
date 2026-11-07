@@ -6,6 +6,7 @@ import { romanizeKana } from './romanize.js';
 import { getSetting, putSetting, putMessage, getMessages, resetAll } from './db.js';
 import { applyLanguage, translate } from './i18n.js';
 import { browserTranslation } from './translation.js';
+import { AttentionController } from './notifications.js';
 
 const $ = id => document.getElementById(id);
 const sections = ['onboarding', 'lobby', 'invitation', 'chat'];
@@ -29,6 +30,8 @@ let translateSession = null;
 let translationGeneration = 0;
 const translationCache = new Map();
 const t = name => translate(name, locale);
+const attention = new AttentionController({ labels: () => ({ title: t('notificationTitle'), body: t('notificationBody') }) });
+let pollIsInitialized = false;
 
 function screen(id) {
   sections.forEach(s => { $(s).hidden = s !== id; });
@@ -133,6 +136,8 @@ function inviteProblem(error) {
   screen('invitation');
 }
 function showLobby() {
+  attention.clear();
+  pollIsInitialized = false;
   clearInterval(pollTimer); pollTimer = null;
   clearInterval(inviteTimer); inviteTimer = null;
   clearInterval(pendingTimer); pendingTimer = null;
@@ -177,6 +182,8 @@ async function openRoom(next) {
   clearInterval(pollTimer);
   clearInterval(inviteTimer);
   clearInterval(pendingTimer); pendingTimer = null;
+  attention.clear();
+  pollIsInitialized = false;
   room = next;
   keys = await deriveRoomKeys(room);
   await api('init', { method: 'POST' });
@@ -201,10 +208,12 @@ async function poll() {
     const received = await api('list');
     const known = new Set(currentMessages.map(m => m.id));
     let changed = false;
+    let newFromOthers = 0;
     for (const envelope of received.messages || []) {
       if (known.has(envelope.id)) continue;
       try {
-        await decryptPayload(keys.messageKey, envelope);
+        const message = await decryptPayload(keys.messageKey, envelope);
+        if (message.senderId !== identity.id) newFromOthers++;
         await putMessage(room.roomId, envelope);
         currentMessages.push(envelope);
         known.add(envelope.id);
@@ -212,6 +221,9 @@ async function poll() {
       } catch { /* Ignore unauthenticated ciphertext. */ }
     }
     if (changed) await renderMessages();
+    // Initial sync may contain old messages. Only alert for later arrivals.
+    if (pollIsInitialized && newFromOthers > 0) attention.incoming(newFromOthers);
+    pollIsInitialized = true;
     $('connection').textContent = t('connected');
     lastErrorShown = false;
   } catch (error) {
@@ -342,6 +354,19 @@ async function enableTranslation() {
   }
 }
 
+// One-time user activation permits Web Audio on supporting browsers.
+// Background browsers may still suspend audio despite this action.
+document.addEventListener('pointerdown', () => attention.unlockAudio(), { once: true, capture: true });
+document.addEventListener('keydown', () => attention.unlockAudio(), { once: true, capture: true });
+$('soundToggle').addEventListener('change', async () => {
+  attention.setSound($('soundToggle').checked);
+  if ($('soundToggle').checked) attention.unlockAudio();
+  await putSetting('alertSound', $('soundToggle').checked);
+});
+$('notifyBtn').addEventListener('click', async () => {
+  const status = await attention.requestPermission();
+  $('notificationStatus').textContent = t(status === 'granted' ? 'notificationsReady' : status === 'denied' ? 'notificationsDenied' : 'notificationsUnavailable');
+});
 $('languageSelect').addEventListener('change', async () => { setLanguage($('languageSelect').value); await putSetting('locale', locale); });
 $('startBtn').addEventListener('click', async () => {
   const alias = $('nickname').value.trim();
@@ -441,6 +466,7 @@ $('sendForm').addEventListener('submit', async event => {
 $('resetBtn').addEventListener('click', async () => {
   if (!confirm(t('resetConfirm'))) return;
   clearInterval(pollTimer); clearInterval(inviteTimer); clearInterval(pendingTimer);
+  attention.clear();
   translateSession?.dispose();
   try { await resetAll(); location.replace(location.pathname); }
   catch (error) { toast(`${t('resetError')}: ${error.message}`); }
@@ -449,9 +475,11 @@ $('resetBtn').addEventListener('click', async () => {
 (async () => {
   try {
     if (!globalThis.crypto?.subtle || !globalThis.indexedDB) throw new Error(t('unsupported'));
-    const [consent, existing, savedLocale] = await Promise.all([
-      getSetting('consent'), getSetting('identity'), getSetting('locale')
+    const [consent, existing, savedLocale, soundSetting] = await Promise.all([
+      getSetting('consent'), getSetting('identity'), getSetting('locale'), getSetting('alertSound')
     ]);
+    $('soundToggle').checked = soundSetting !== false;
+    attention.setSound($('soundToggle').checked);
     setLanguage(savedLocale || preferredLanguage());
     if (consent && existing?.id && existing?.alias) {
       identity = existing;
@@ -461,6 +489,12 @@ $('resetBtn').addEventListener('click', async () => {
       }
     }
     if (pendingInvite || malformedInvite) showInvitation();
+    else if (identity && new URLSearchParams(location.search).has('resume')) {
+      const previous = await getSetting('lastRoom');
+      history.replaceState(null, '', location.pathname);
+      if (previous) { try { await openRoom(previous); } catch { showLobby(); } }
+      else showLobby();
+    }
     else if (identity) showLobby();
     else screen('onboarding');
   } catch (error) { screen('onboarding'); $('startBtn').disabled = true; toast(`${t('unsupported')}: ${error.message}`); }
