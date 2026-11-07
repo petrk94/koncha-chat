@@ -12,6 +12,7 @@ import { generateDeviceKeyPair, exportDevicePublicKey, deviceFingerprint, signCh
 import { authenticateRoomMessage } from './message-policy.js';
 import { normalizeRooms, upsertRoom, labelForRoom } from './rooms.js';
 import { translationCapabilities } from './translation-capabilities.js';
+import { runTranslationSelfTest } from './translation-selftest.js';
 import { subscribeRoomPush, unsubscribeRoomPush } from './push-client.js';
 
 const $ = id => document.getElementById(id);
@@ -563,8 +564,27 @@ $('verifyPeerBtn').addEventListener('click', async () => {
   await refreshDeviceCodes();
 });
 $('checkTranslationBtn').addEventListener('click', async () => {
-  const info = await translationCapabilities();
-  $('translationCapability').textContent = info.native ? t('localAINative') : info.localModelBundled ? `${t('localAIInstalled')}: ${info.installedPairs.join(', ')}` : info.webGPU ? t('localAIGPUUnconfigured') : info.wasm ? t('localAIWASMUnconfigured') : t('localAIUnavailable');
+  const output = $('translationCapability');
+  const button = $('checkTranslationBtn');
+  button.disabled = true;
+  try {
+    const info = await translationCapabilities();
+    output.textContent = info.native ? t('localAINative') : info.localModelBundled ? `${t('localAIInstalled')}: ${info.installedPairs.join(', ')}` : info.webGPU ? t('localAIGPUUnconfigured') : info.wasm ? t('localAIWASMUnconfigured') : t('localAIUnavailable');
+    const from = $('sourceLanguage').value, to = $('targetLanguage').value;
+    if (from === to) { output.textContent = t('chooseDifferent'); return; }
+    // This click authorizes a diagnostic, not a silent model download.
+    if (!info.native && !info.localModelBundled) return;
+    if (!confirm(t('modelConsent'))) return;
+    output.textContent = t('translationDownload');
+    const result = await runTranslationSelfTest({
+      from, to, createSession: browserTranslation,
+      onProgress: message => { output.textContent = message; }
+    });
+    // Fixed, non-private sample text only; no chat messages leave the device.
+    output.textContent = `${t('translationAvailable')} · ${result.elapsedMs} ms · ${result.output}`;
+  } catch (error) {
+    output.textContent = `${t('translationUnsupported')} (${error.message})`;
+  } finally { button.disabled = false; }
 });
 $('pwaCheckBtn').addEventListener('click', () => {
   $('pwaReport').textContent = formatPwaReport(pwaFeatureReport(), locale);
