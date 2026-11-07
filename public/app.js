@@ -313,12 +313,42 @@ async function openRoom(next) {
   pollTimer = setInterval(() => { void poll(); }, 2800);
   if (presenceEnabled) void pulsePresence();
 }
+/** Strict v2 processing: never attempt AES room-key decryption as fallback.
+ * Olm state is durably committed before a message is displayed or ACKed.
+ */
+async function acceptIncomingSecure(chatRoom,envelope){
+  const received=await receiveSecureEnvelope(chatRoom,envelope);
+  if(!received.fresh)return received;
+  if(received.peer){
+    const before=chatRoom.peer||{};
+    // A pinned human-verified identity must never be changed silently.
+    if(before.verified && before.olmCurve && before.olmCurve!==received.peer.olmCurve)
+      throw new Error('Verified device identity changed');
+    chatRoom.peer={...before,...received.peer,
+      verified:!!before.verified && before.olmCurve===received.peer.olmCurve};
+    await saveRoomRecord(chatRoom);
+    if(room?.roomId===chatRoom.roomId)updateConversation();
+  }
+  if(received.handshaken){
+    // Olm prekey message is now stored; responder ratchets and queues ACK.
+    await sendSecureMessage(chatRoom,identity,'','hello_ack');
+  }
+  return received;
+}
+async function flushSecure(chatRoom,chatKeys){
+  if(!isOlmRoom(chatRoom))return;
+  await retrySecureOutbox(chatRoom,envelope=>api('send',{
+    method:'POST',body:{envelope,senderPresenceId:chatRoom.presenceId||''},
+    contextRoom:chatRoom,contextKeys:chatKeys
+  }));
+}
 async function poll() {
   if (polling || !room || !keys) return;
   polling = true;
   try {
     const snapshotRoom = room;
     const snapshotKeys = keys;
+    if(isOlmRoom(snapshotRoom)) await flushSecure(snapshotRoom,snapshotKeys);
     const received = await api('list', { contextRoom: snapshotRoom, contextKeys: snapshotKeys });
     if (room !== snapshotRoom) return;
     const known = new Set(currentMessages.map(m => m.id));
@@ -327,17 +357,24 @@ async function poll() {
     for (const envelope of received.messages || []) {
       if (known.has(envelope.id)) continue;
       try {
-        const message = await checkedMessage(snapshotRoom, snapshotKeys, envelope);
-        const stored = message.signature
-          ? await putVerifiedMessage(snapshotRoom.roomId, envelope, message.senderId, message.nonce)
-          : (await putMessage(snapshotRoom.roomId, envelope), true);
-        if (!stored) continue;
-        if (message.senderId !== identity.id) newFromOthers++;
+        if(isOlmRoom(snapshotRoom)){
+          const result=await acceptIncomingSecure(snapshotRoom,envelope);
+          if(!result.fresh)continue;
+          if(result.type==='chat'&&result.payload.senderId!==identity.id)newFromOthers++;
+        } else {
+          const message=await checkedMessage(snapshotRoom,snapshotKeys,envelope);
+          const stored=message.signature
+            ? await putVerifiedMessage(snapshotRoom.roomId,envelope,message.senderId,message.nonce)
+            : (await putMessage(snapshotRoom.roomId,envelope),true);
+          if(!stored)continue;
+          if(message.senderId!==identity.id)newFromOthers++;
+        }
         currentMessages.push(envelope);
         known.add(envelope.id);
-        changed = true;
-      } catch { /* Ignore unauthenticated ciphertext. */ }
+        changed=true;
+      } catch { /* Reject unsigned, corrupted and wrong-session messages. */ }
     }
+    if(isOlmRoom(snapshotRoom)) await flushSecure(snapshotRoom,snapshotKeys);
     if (changed) await renderMessages();
     // Initial sync may contain old messages. Only alert for later arrivals.
     if (pollIsInitialized && newFromOthers > 0) attention.incoming(newFromOthers);
@@ -355,11 +392,17 @@ async function renderMessages() {
   const container = $('messages');
   container.replaceChildren();
   const displayed = [];
-  for (const envelope of currentMessages) {
-    try {
-      const data = await checkedMessage(room, keys, envelope, true);
-      displayed.push({ ...data, id: envelope.id });
-    } catch { /* Corrupted local data is never displayed. */ }
+  if(isOlmRoom(room)){
+    // Double Ratchet deliberately destroys older message keys. Persisted local
+    // display history is independently encrypted in IndexedDB at receipt.
+    displayed.push(...await visibleSecureMessages(room));
+  }else{
+    for (const envelope of currentMessages) {
+      try {
+        const data = await checkedMessage(room, keys, envelope, true);
+        displayed.push({ ...data, id: envelope.id });
+      } catch { /* Corrupted local data is never displayed. */ }
+    }
   }
   if (generation !== translationGeneration) return;
   displayed.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
