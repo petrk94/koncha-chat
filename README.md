@@ -1,65 +1,69 @@
-# Koncha 0.6 development branch
+# Koncha · private intercultural messenger (experimental)
 
-**0.6.0-alpha.1 is a partial implementation, not a secure release.** The 0.5 chat/relay remains experimental without a Double Ratchet or forward secrecy.
+**Current development version:** `0.7.0-alpha.1` · **NOT production-ready, not audited secure E2EE.**
 
-This branch adds a network-first offline PWA shell cache (no API/chat storage in the service worker), a device feature report and an optional on-device Transformers.js + ONNX/WASM translation worker. Compiled worker, WASM and model files must be separately provisioned, so local inference is not runnable straight from Git checkout. Real hardware testing has NOT happened here. See `docs/SECURITY_PROTOCOL_0_6.md`, `docs/LOCAL_AI_0_6.md` and `docs/PWA_TESTS_0_6.md`.
+Koncha is a clean-room PHP 8.2+ and browser-JavaScript messenger prototype with a local-first DE/EN/JA UI. It is **not a fork** of SimpleX, Signal or Matrix. Original source is copyright Kirpeit Solutions, all rights reserved. See `LICENSE.md`.
 
-# Koncha — private intercultural messenger (experimental)
+## Working implementation
 
-**Current feature branch:** `feat/device-identity-multiroom-presence`
-**Candidate version:** `0.6.0-alpha.1`
-**Status:** For testing with invented messages only. **Not audited secure E2EE.**
+- Multiple one-to-one rooms and persistent contacts in the browser's IndexedDB.
+- 60-minute, single-use invitation URLs with a self-declared inviting name/handle; recipient accepts before onboarding. Display names are **not** proof of human identity.
+- AES-GCM ciphertext relay, P-256 device signatures/fingerprints and replay deduplication, but **one shared key per room**. This is experimental cryptography without forward secrecy or independently reviewed full protocol.
+- Encrypted messages remain on the PHP server up to seven days (cleanup on room activity), with at most 300 stored messages per room. No guaranteed delivery or read receipts.
+- Optional pseudonymous online signal while the app is running; not a verified presence signal.
+- Responsive DE/EN/JA UI, Japanese IME-friendly Enter key, emoji, kana-to-romaji reading aid.
+- Browser-native local Translator API where supported and optional client-side Transformers.js/ONNX WASM worker from the same Koncha origin. **Model weights and runtime are not bundled into Git**; until provisioned the UI correctly declines to translate. No cloud inference is allowed.
+- Hidden-tab audio, unread favicon and generic OS notifications while the app runs.
+- Offline PWA application shell, excluding chat API, secrets and model downloads from the service-worker cache. Previously cached encrypted messages may be viewed locally while offline; **offline sending is not available**.
+- **0.7:** opt-in Web Push per chat with server-side VAPID signing and **EMPTY push payloads**. This requires a configured HTTPS server with PHP cURL and valid VAPID keys and an actual device subscription. Not tested end-to-end on iOS/Android yet. The push provider sees network metadata and a subscription endpoint, **not** message plaintext. The Koncha server can correlate subscriptions across rooms if the same device opts in to multiple chats.
+- **0.7:** SHA-256 verification for provisioned local AI model weights, server-side Push endpoint allowlist and automated tests.
 
-Koncha is a from-scratch browser/PWA messenger with a small PHP ciphertext relay. It is not a fork of SimpleX or Signal and does not implement SMP or Double Ratchet. The project is copyrighted by Kirpeit Solutions; see [LICENSE.md](LICENSE.md).
+**Do not send confidential, intimate, financial, medical or identifying information in Koncha Alpha.** Read `docs/SECURITY_PROTOCOL_0_6.md` and `docs/SECURITY_0_5.md`.
 
-## Source of truth
-
-- GitHub: https://github.com/petrk94/koncha-chat
-- `main` is the most recently merged release (last verified **0.4**, GitHub PR #2).
-- New 0.5 work must stay in a feature branch until the PR is reviewed and merged. Never copy files from old ZIP folders into a newer tree without diffing.
-- On your own Linux system: use **one** working folder (`~/Downloads/koncha-chat` or optionally `~/Projekte/koncha-chat`) and check `git status -sb` and `./scripts/doctor.sh` first.
-
-## What's implemented in 0.5 alpha
-
-- A **locally generated P-256 ECDSA private key** in IndexedDB for each browser identity; a public device fingerprint can be compared out-of-band with a contact. A confirmed device key is pinned locally; signed messages with a changed key are rejected. This authenticates a particular key, not a human.
-- Unique room secrets per **one-to-one conversation**, a locally stored conversation list, multiple independent contacts, 60-minute one-time invites with personal display name and handle, and server rejection of additional invites once a room has been claimed.
-- Browser-local AES-256-GCM message encryption, digitally signed new messages, and local signed-nonce replay deduplication. Not a forward-secret or audited E2EE protocol.
-- Relay retains ciphertext for up to **7 days**, max 300 messages per room, deleting on next activity after expiry. An absent user can fetch stored ciphertext upon returning; there is no guaranteed delivery or read receipt.
-- Optional online activity indicator based on a **random room-specific pseudonym**. Presence is opt-in, expires after ~70 seconds, and can be spoofed by any holder of the room secret. It indicates activity, not a verified person online.
-- DE/EN/JA UI, Japanese IME-safe Enter to send, emoji, kana-to-romaji, and optional native on-device browser Translator API when available. **No cloud inference.**
-- A capability-check button for native translation API, WebGPU and WebAssembly. **WebGPU/WASM translation models are not yet bundled**, and API availability doesn't mean a requested language pair works.
-- While the app is running: hidden-tab sound, favicon unread count and optional privacy-preserving system notices. **No closed-app Web Push yet.**
-
-## Run on Linux
-
-Requires PHP 8.2+, Node 20+ for tests, secure browser context and IndexedDB.
+## Run locally (Linux)
 
 ```bash
 cd ~/Downloads/koncha-chat
 ./scripts/doctor.sh
 npm test
 php -S 127.0.0.1:8787 -t public
-# Browser: http://127.0.0.1:8787/
+# open http://127.0.0.1:8787
 ```
 
-For physical iPhone/Android devices use a reachable **HTTPS** server. Do not expose the PHP development server directly to the Internet. Point the public web root at `public/`; **`var/rooms/` must live outside the web root**. See [docs/PWA_DEVICE_TESTS.md](docs/PWA_DEVICE_TESTS.md).
+Node >=20 and PHP >=8.2 are used for tests. The PHP built-in server is for **local development only**. Do not expose it publicly. To use real mobile devices, deploy over HTTPS with `public/` as the **only** served document root and keep `var/rooms/` outside it. In production-like demos also configure TLS, privacy-sensitive access logs, appropriate permissions, retention cleanup, and abuse/rate limiting.
 
-## Security, privacy and retention
-
-**Do not use this alpha for confidential messages.** The shared room key permits retrospective decryption after key compromise. There is no forward secrecy, ratchet, secure device recovery, malicious-client-update defense, hardened relay, trusted-directory identity verification, abuse/rate controls, or independent security audit. Device fingerprints must be compared through another trusted channel. Invite names/handles are self-declared. Screenshot protection is not available in browser PWAs.
-
-- Local IndexedDB: device keypair, identity, room secrets, encrypted message cache, replay identifiers, preferences. Clearing site data permanently removes local access; there is no automatic recovery.
-- PHP relay: room IDs, bearer-token verifier, encrypted envelopes, timestamps, temporary room-presence records. Webserver access logs may contain IP addresses; the relay is **not anonymous**.
-- Translation: decrypted chat text is processed only on the recipient's device by the local browser API if the device supports it. No cloud fallback.
-
-Read [docs/SECURITY_0_5.md](docs/SECURITY_0_5.md), [docs/LOCAL_TRANSLATION.md](docs/LOCAL_TRANSLATION.md) and [docs/RELEASE_NOTES_0_5.md](docs/RELEASE_NOTES_0_5.md).
-
-## Publish the new branch via GitHub CLI
-
-The connected GitHub app currently rejects write operations with HTTP 403. If that remains the case, use the included **Git history** and your authenticated local `gh` CLI:
+## Optional client-only translation
 
 ```bash
-./scripts/publish-pr-0.5.sh
+npm install
+npm run ai:build
+python3 -m pip install huggingface_hub
+python3 scripts/prepare-models.py ja-en en-ja de-en en-de
+npm run ai:verify
 ```
 
-It checks the branch and dirty files, adds `origin` only if missing, pushes `feat/device-identity-multiroom-presence` and opens a PR to `main`. **Do not merge untested claims of production security.**
+Provisioned `public/models/`, `public/vendor/` and `public/local-translation.worker.js` are intentionally ignored by Git. They must be separately reviewed, tested and deployed to the **same origin** as the PWA. A passed checksum check is NOT proof of acceptable translation quality or successful inference. Confirm exact model licenses and attribution. Details: `docs/LOCAL_AI_0_6.md` and `docs/RELEASE_NOTES_0_7.md`.
+
+## Optional closed-PWA Web Push
+
+The push feature is **OFF by default** and fails closed without a server-side key and PHP cURL. Configure a P-256 VAPID signing key **outside** `public/`:
+
+```bash
+bash scripts/generate-vapid.sh
+# Configure your PHP server environment:
+# KONCHA_VAPID_PRIVATE_KEY_FILE=/absolute/path/outside/public/vapid-private.pem
+# KONCHA_VAPID_SUBJECT=mailto:your-real-admin-contact@example.org
+```
+
+When HTTPS and Push are available, each participant can enable notifications **for each chat** inside Chat Settings. Messages continue to send even when push transport is unavailable. Read `docs/WEB_PUSH_0_7.md` before enabling: push endpoints can correlate relationships, delivery is not guaranteed, and iPhone requires an installed Home Screen PWA.
+
+## Verification and project files
+
+- `npm test` — Node/PHP automated tests; no npm install needed.
+- `./scripts/doctor.sh` — checkout path, Git branch/status, release, remotes, runtime files.
+- `npm run ai:verify` — checks provisioned model assets against pinned manifest SHA-256 digests.
+- `docs/WORKSPACE.md` — map of each source directory and script.
+- `docs/PWA_TESTS_0_6.md`, `docs/WEB_PUSH_0_7.md` — physical device acceptance plan.
+- `docs/SECURITY_PROTOCOL_0_6.md` — **specification only**, not the implementation of Double Ratchet.
+
+GitHub: https://github.com/petrk94/koncha-chat · Keep one local working directory; publish changes through a feature branch and PR. Do not commit real chats, private keys, generated model weights, room files, invite URLs or secrets.

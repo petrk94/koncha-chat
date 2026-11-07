@@ -73,3 +73,12 @@ The optional `python tests/browser-smoke.py` runs a two-profile Chromium UI simu
 - `docs/SECURITY_PROTOCOL_0_6.md` is a **migration specification, not the implementation of audited Double Ratchet E2EE**. Never label 0.6 production secure.
 - The service worker caches only network-first app shell assets. Keep the server API uncacheable and never cache private data.
 - Physical iOS/Android testing and closed-PWA push remain unperformed, regardless of capability flags.
+
+
+## 0.7 Web Push + model integrity constraints
+
+- Web Push is explicit opt-in PER conversation. Only empty messages go to vendor endpoints; NEVER plaintext, sender names, room IDs, chat ciphertext or invitation keys. The vendor does see timing and endpoint metadata, and the server can correlate rooms by an endpoint; disclose this.
+- Use HTTPS-only vendor allowlist and no redirects. Keep VAPID private keys outside `public/`, in an environment path. Never accept arbitrary client URL targets or commit PEM keys.
+- When deleting local data, attempt server push deregistration first and warn on failure.
+- `npm run ai:verify` verifies local ONNX file integrity, not model quality or inference correctness. Never claim built-in iOS/Android translation until real model and physical device tests pass.
+- Existing E2EE is experimental without forward secrecy; a Web Push change does not alter its security guarantees.

@@ -1,3 +1,5 @@
+> **Version note:** 0.7 adds `npm run ai:verify` (model integrity) and a native-API-unsupported-pair fallback to the same-origin WASM worker. This is **not** a real model inference or quality test.
+
 # Koncha 0.6 — On-device translation (optional build, not bundled)
 
 ## Implementation present

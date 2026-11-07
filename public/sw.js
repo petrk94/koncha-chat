@@ -1,10 +1,10 @@
 /* Koncha 0.6 app-shell cache. NEVER cache /api.php or chat content. */
-const CACHE = 'koncha-shell-v0.6.0-alpha.1';
+const CACHE = 'koncha-shell-v0.7.0-alpha.1';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/crypto.js', '/db.js',
   '/i18n.js', '/identity.js', '/message-policy.js', '/notifications.js',
   '/romanize.js', '/rooms.js', '/translation.js', '/translation-capabilities.js',
-  '/local-translation.js', '/pwa-diagnostics.js', '/icon.svg', '/icon-192.png',
+  '/local-translation.js', '/push-client.js', '/pwa-diagnostics.js', '/icon.svg', '/icon-192.png',
   '/icon-512.png', '/manifest.webmanifest'
 ];
 
@@ -58,4 +58,14 @@ self.addEventListener('notificationclick', event => {
     if (open) { await open.focus(); return; }
     await self.clients.openWindow('/?resume=1');
   })());
+});
+
+// Server sends EMPTY push messages: never trust push data or put plaintext in a notice.
+self.addEventListener('push', event => {
+  event.waitUntil(self.registration.showNotification('Koncha', {
+    body: 'New message. Open Koncha to read it.',
+    icon: '/icon-192.png', badge: '/icon-192.png',
+    tag: 'koncha-push', renotify: false,
+    data: { url: '/?resume=1' }
+  }));
 });
