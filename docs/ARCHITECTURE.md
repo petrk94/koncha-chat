@@ -1,4 +1,4 @@
-# Koncha architecture — prototype 0.1
+# Koncha architecture — prototype 0.2
 
 ## Motivation
 
@@ -23,7 +23,7 @@ PHP 8.2 relay on own origin
     |  temporary encrypted envelopes, expiry on activity
 ```
 
-Browser creates a high-entropy random room ID and 256-bit shared secret. It distributes an invite `#join=<roomId>.<key>` via a separate trusted channel. Fragments are not part of the HTTP request to the server, and the app removes the fragment from its own URL upon import. The **URL fragment must still be treated as a password**; anyone obtaining it can read and send messages.
+Browser creates a high-entropy random room ID and 256-bit shared secret. For each invitation, the browser creates an independent 256-bit invitation token. The URL `#invite=<roomId>.<inviteId>.<token>` contains **no room key**. The room key is encrypted with a per-invitation key and stored as a temporary handoff on the relay. The relay stores only a SHA-256 verifier of the invite token, the encrypted handoff and a 60-minute expiration. The invited browser first checks availability, then atomically redeems the invitation once; the encrypted handoff is removed on claim, and the previous unused link is invalidated when a new one is created. Expired handoffs are erased on their next access, not precisely at the expiry instant. The **URL fragment must still be treated as a secret**; whoever redeems it first obtains the shared room key and can impersonate either participant. Once redeemed, link expiry does not remove room access.
 
 The browser derives separate message-encryption and relay-authentication keys with Web Crypto HKDF-SHA-256 and different `info` domain labels. Messages use AES-256-GCM with a fresh 96-bit random IV and authenticated JSON payloads. The relay stores room ID, SHA-256 of relay bearer token, message UUID, IV, ciphertext and timestamps, not the plaintext or original room secret.
 
@@ -31,12 +31,12 @@ An attacker with the original invite can impersonate either party. A malicious s
 
 ## Storage and deletion
 
-- Client IndexedDB: display name, consent state, unique local sender ID, room IDs and invite secrets, cached ciphertext envelopes.
+- Client IndexedDB: display name, consent state, random browser-local sender ID, room IDs and room secrets, cached ciphertext envelopes, language preferences.
 - Server: hashed bearer token and ciphertext envelopes, max 300 most recent messages/room and 24-hour envelope expiry (garbage-collection on access, not a guaranteed timed deletion). Old room metadata may persist until an operator cleanup.
 - Clearing browser data, resetting the app, or uninstalling the PWA can delete local keys permanently. No recovery is offered.
 - Browser storage can also be evicted by the device and is **not a guaranteed permanent archive**.
 - Third-party logging (web server, reverse proxies, CDN, hosts) may record IP addresses despite Koncha's own code not logging them. Configure logs separately.
-- No translation or message contents leave the device apart from encrypted relay envelopes.
+- Incoming messages can be optionally translated with the native on-device Translator API, where available; otherwise translation is disabled until a browser-side WebGPU/WASM model is packaged. No chat text goes to a cloud translator. See LOCAL_TRANSLATION.md.
 
 ## Next-stage security prerequisites
 

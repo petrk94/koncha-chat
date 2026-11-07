@@ -2,66 +2,103 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101a26">
-  <meta name="description" content="Koncha: ein privater interkultureller Chat-Prototyp.">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#121b2b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Koncha — local-first multilingual messaging experiment.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
   <title>Koncha — Private Messenger Prototype</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <div class="shell">
-    <header class="topbar">
-      <div class="brand"><img src="/icon.svg" width="38" height="38" alt=""><span>Koncha<small>こんにちは、世界。</small></span></div>
-      <div class="right"><span class="prototype">PROTOTYPE · NOT SECURE FOR SECRETS</span><button class="ghost small" id="resetBtn" type="button" title="Lokale Daten löschen">Reset</button></div>
-    </header>
-    <main id="app" class="main">
-      <section id="onboarding" class="panel narrow" hidden>
-        <div class="eyebrow">Willkommen / ようこそ</div>
-        <h1>Deine Nachrichten. Deine Entscheidung.</h1>
-        <p>Koncha ist ein experimenteller Messenger für private, sprachübergreifende Gespräche. Keine Telefonnummer, keine Kontaktliste und kein Konto.</p>
-        <div class="notice danger"><strong>Nur Testnachrichten!</strong> Die Verschlüsselung ist nicht auditiert. Das Produkt bietet noch keine verifizierte Absenderidentität und keine Forward Secrecy. Nicht für persönliche Geheimnisse verwenden.</div>
-        <h2>Was wird wo gespeichert?</h2>
-        <div class="facts"><div><strong>Auf diesem Gerät</strong><span>Dein Anzeigename, Gerätekennung, Raum-Schlüssel und verschlüsselte Chatnachrichten in IndexedDB. Browserdaten können verloren gehen.</span></div><div><strong>Auf unserem Testserver</strong><span>Raumkennung, Zugangsprüfsumme, verschlüsselte Nachrichten und Zeitstempel. Nach 24 Stunden werden Nachrichten beim nächsten Zugriff aus dem aktiven Speicher entfernt; Backups und Webserver-Logs können abweichen.</span></div><div><strong>Nicht benötigt</strong><span>E-Mail-Adresse, Telefonnummer, Adressbuch, Werbung und Tracking.</span></div></div>
-        <label class="field" for="nickname">Dein lokaler Anzeigename</label>
-        <input id="nickname" autocomplete="nickname" maxlength="32" placeholder="z. B. Kiyo oder Alex" required>
-        <label class="check"><input id="ack" type="checkbox"><span>Ich verstehe, dass dies ein unsicherer Entwicklungsprototyp ist und dass Schlüssel lokal gespeichert werden.</span></label>
-        <button id="startBtn" class="primary" type="button">Testmodus starten</button>
-      </section>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><img src="/icon.svg" width="40" height="40" alt=""><span>koncha<small data-i18n="tagline">Talk your way.</small></span></div>
+    <div class="top-actions">
+      <span class="prototype" data-i18n="prototype">EXPERIMENT · NOT SECURE</span>
+      <label class="sr-only" for="languageSelect" data-i18n="language">Sprache</label>
+      <select id="languageSelect" class="language-select" aria-label="Language / Sprache / 言語"><option value="de">DE</option><option value="en">EN</option><option value="ja">日本語</option></select>
+      <button class="ghost small" id="resetBtn" type="button" data-i18n="reset">Zurücksetzen</button>
+    </div>
+  </header>
+  <main class="main" id="app">
+    <section id="onboarding" class="panel narrow" hidden>
+      <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="welcome">Willkommen bei Koncha</span></div>
+      <h1 data-i18n="onboardTitle">Privat sprechen. Sprachen verbinden.</h1>
+      <p class="lead" data-i18n="onboardLead">Ein experimenteller Messenger ohne öffentliche Kontaktsuche, Telefonnummer oder zentrale Benutzerregistrierung.</p>
+      <div class="notice danger"><strong data-i18n="testOnly">Nur für Testnachrichten.</strong> <span data-i18n="notAudited">Keine geprüfte Identitätsbindung, keine Forward Secrecy. Nicht für vertrauliche Nachrichten geeignet.</span></div>
+      <h2 data-i18n="storageTitle">Wo liegen deine Daten?</h2>
+      <div class="facts">
+        <div><strong data-i18n="localTitle">Nur im Browser</strong><span data-i18n="localText">Anzeigename, zufällige Gerätekennung, Raumschlüssel und verschlüsselte lokale Nachrichten in IndexedDB. Löschen von Browserdaten kann alles unwiederbringlich entfernen.</span></div>
+        <div><strong data-i18n="serverTitle">Auf deinem Test-Relay</strong><span data-i18n="serverText">Raum-ID, Authentifizierungsprüfsumme, verschlüsselte Nachrichten und Zeitstempel. Nachrichten werden nach 24 Stunden bei Zugriff bereinigt; Serverlogs und Backups können länger bestehen.</span></div>
+        <div><strong data-i18n="noAccountTitle">Keine zentrale Registrierung</strong><span data-i18n="noAccountText">Keine E-Mail und kein Passwort. Keine Wiederherstellung oder Synchronisierung zwischen Browsern. Jeder Browser ist ein separates Testgerät.</span></div>
+      </div>
+      <label class="field" for="nickname" data-i18n="nicknameLabel">Dein lokaler Anzeigename</label>
+      <input id="nickname" autocomplete="nickname" maxlength="32" data-i18n-placeholder="nicknamePlaceholder" placeholder="z. B. Yuki oder Alex" required>
+      <label class="check"><input id="ack" type="checkbox"><span data-i18n="ack">Ich verstehe die Risiken und die lokale Speicherung dieses Testprototyps.</span></label>
+      <button id="startBtn" class="primary full" type="button" data-i18n="start">Lokale Identität erstellen</button>
+    </section>
 
-      <section id="lobby" class="panel narrow" hidden>
-        <div class="eyebrow">Private Verbindung / プライベート接続</div>
-        <h1>Ein Gespräch beginnt mit deiner Einladung.</h1>
-        <p>Erstelle einen Raum und sende den Einladungslink über einen anderen vertrauenswürdigen Kanal an dein Gegenüber. Der Link enthält den geheimen Raumschlüssel.</p>
-        <div class="notice">Für einen echten Zwei-Geräte-Test muss Koncha über <strong>HTTPS</strong> erreichbar sein. <code>localhost</code> ist nur auf dem jeweiligen Gerät nutzbar.</div>
-        <button id="createBtn" class="primary" type="button">Neuen privaten Testraum erstellen</button>
-        <div id="pendingInvite" hidden><h2>Einladung erhalten</h2><p>Eine gültige Einladung wurde erkannt. Nur übernehmen, wenn du dem Absender vertraust.</p><button id="joinBtn" class="secondary" type="button">Testraum beitreten</button></div>
-        <div id="recentRoom" hidden><h2>Dein letzter Testraum</h2><p>Du kannst ihn auf diesem Gerät wieder öffnen, solange die Browserdaten erhalten sind.</p><button id="resumeBtn" class="secondary" type="button">Letzten Raum öffnen</button></div>
-      </section>
+    <section id="lobby" class="panel narrow" hidden>
+      <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="lobbyEyebrow">Dein privater Raum</span></div>
+      <h1 data-i18n="lobbyTitle">Ein Gespräch beginnt mit Vertrauen.</h1>
+      <p class="lead" data-i18n="lobbyLead">Lade genau eine Person mit einem einmaligen, 60 Minuten gültigen Link ein. Der Link wird nach Verwendung ungültig.</p>
+      <div id="identityCard" class="identity-card"><span data-i18n="deviceIdentity">Lokale Gerätekennung</span><code id="deviceId">–</code></div>
+      <button id="createBtn" class="primary full" type="button" data-i18n="createRoom">Neuen Testraum erstellen</button>
+      <div id="pendingInvite" class="invite-box" hidden>
+        <span class="mini-label" data-i18n="pending">Einladung erkannt</span>
+        <h2 data-i18n="joinTitle">Du wurdest eingeladen.</h2>
+        <p data-i18n="joinHint">Die Einladung ist einmalig. Öffne sie nur, wenn du den Absender kennst.</p>
+        <button id="joinBtn" class="secondary full" type="button" data-i18n="join">Einladung annehmen</button>
+      </div>
+      <div id="inviteError" class="notice danger" hidden role="alert"></div>
+      <div id="recentRoom" class="invite-box" hidden><h2 data-i18n="recentRoomTitle">Letztes Gespräch</h2><p data-i18n="recentRoomHint">Auf diesem Browser lokal gespeichert.</p><button id="resumeBtn" class="secondary full" type="button" data-i18n="resume">Gespräch fortsetzen</button></div>
+      <p class="helper" data-i18n="httpsHint">Für zwei physische Geräte brauchst du HTTPS. Unter localhost erreichst du nur den lokalen Rechner.</p>
+      <p class="helper" data-i18n="iosHint">iPhone: In Safari Teilen → „Zum Home-Bildschirm“. Android: Browsermenü → „App installieren“ oder „Zum Startbildschirm“.</p>
+    </section>
 
-      <section id="chat" class="chat-layout" hidden>
-        <aside class="sidebar">
-          <div class="eyebrow">Experimental chat</div>
-          <h1 id="chatTitle">Dein Testraum</h1>
-          <p>Dieser Raum hat keine öffentliche Kontaktliste. Jeder mit dem vollständigen Einladungslink kann mitlesen und Nachrichten senden.</p>
-          <div class="sidebar-actions"><button id="shareBtn" class="secondary" type="button">Einladung kopieren</button><button id="leaveBtn" class="ghost" type="button">Raum verlassen</button></div>
-          <div class="notice danger"><strong>Keine geprüfte Ende-zu-Ende-Sicherheit.</strong> Nachrichten sind experimentell mit AES-GCM verschlüsselt, aber es gibt weder Identitätsprüfung noch Ratchet.</div>
-          <label class="check"><input type="checkbox" id="romajiToggle"><span>Kana-Lesehilfe als Romaji anzeigen (Kanji noch nicht unterstützt)</span></label>
-        </aside>
-        <div class="conversation">
-          <div class="conversation-top"><span class="status-dot"></span><strong>Koncha</strong><span id="connection" class="connection">Verbinde…</span></div>
-          <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Nachrichten"><p class="empty">Schreib eine Testnachricht. Nur eingeladene Personen mit dem geheimen Link können sie entschlüsseln.</p></div>
-          <form id="sendForm" class="composer"><label class="sr-only" for="messageInput">Nachricht</label><textarea id="messageInput" rows="1" maxlength="2000" placeholder="Nachricht / メッセージ …" required></textarea><button id="sendBtn" class="primary" type="submit">Senden</button></form>
-          <p class="composer-tip">Keine automatische KI-Übersetzung. Keine Cloud-Analyse. Testnachrichten verwenden.</p>
+    <section id="chat" class="chat-layout" hidden>
+      <aside class="sidebar" id="sidebar">
+        <div class="side-brand"><span class="eyebrow" data-i18n="chatEyebrow">Dein Gespräch</span><span class="status-pill"><span class="status-dot"></span><span data-i18n="experimental">Testmodus</span></span></div>
+        <div class="room-avatar">こ</div>
+        <h1 id="chatTitle">Koncha</h1>
+        <p data-i18n="sidebarHint">Einmalige Einladungen. Keine automatische Kontaktsuche. Dies ist noch kein authentifizierter Messenger.</p>
+        <div class="sidebar-actions"><button id="shareBtn" class="primary" type="button" data-i18n="newInvite">Einladung erzeugen</button><button id="leaveBtn" class="ghost" type="button" data-i18n="leave">Zurück</button></div>
+        <div id="inviteStatus" class="invite-status" hidden><span id="inviteCountdown"></span><button id="revokeBtn" type="button" class="ghost small" data-i18n="revoke">Widerrufen</button></div>
+        <div class="notice danger small-notice" data-i18n="roomWarning">Experimentelle Verschlüsselung, keine überprüfte Absenderidentität. Keine Geheimnisse senden.</div>
+        <div class="device-box"><span data-i18n="deviceIdentity">Lokale Gerätekennung</span><code id="chatDeviceId">–</code></div>
+      </aside>
+      <div class="conversation">
+        <button id="chatHeaderBtn" type="button" class="conversation-top" aria-expanded="false" aria-controls="chatPreferences">
+          <span class="avatar">こ</span><span class="contact-title"><strong data-i18n="chatName">Privater Testraum</strong><small id="connection" data-i18n="connecting">Verbinde…</small></span><span class="header-gear" aria-hidden="true">⚙</span><span class="sr-only" data-i18n="preferences">Gesprächseinstellungen öffnen</span>
+        </button>
+        <div id="chatPreferences" class="preferences" hidden>
+          <div class="preferences-head"><strong data-i18n="preferencesTitle">Gesprächseinstellungen</strong><button id="closePreferences" class="ghost small" type="button" aria-label="Close">✕</button></div>
+          <label class="check compact"><input type="checkbox" id="romajiToggle"><span data-i18n="romaji">Kana als Romaji anzeigen (ohne Kanji)</span></label>
+          <label class="check compact"><input type="checkbox" id="enterToggle" checked><span data-i18n="enterSend">Enter sendet · Shift+Enter neue Zeile</span></label>
+          <div class="divider"></div>
+          <label class="check compact"><input type="checkbox" id="translationToggle"><span data-i18n="translateToggle">Eingehende Nachrichten lokal übersetzen</span></label>
+          <div class="inline-fields"><label><span data-i18n="sourceLanguage">Originalsprache</span><select id="sourceLanguage"><option value="ja">日本語</option><option value="en">English</option><option value="de">Deutsch</option></select></label><label><span data-i18n="targetLanguage">Übersetzung nach</span><select id="targetLanguage"><option value="de">Deutsch</option><option value="en">English</option><option value="ja">日本語</option></select></label></div>
+          <p id="translationStatus" class="helper" data-i18n="translationHint">Nur bei unterstützten Browsern. Keine Cloud-Übersetzung.</p>
+          <p class="helper" data-i18n="screenshotHint">Screenshots lassen sich im Browser nicht zuverlässig verhindern oder erkennen.</p>
         </div>
-      </section>
-    </main>
-    <footer class="footer"><span>Koncha · 0.1 Alpha · Kirpeit Solutions</span><span>Nur für lokale und selbst gehostete Entwicklung</span></footer>
-    <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
-  </div>
+        <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Messages"><div class="empty-state"><div class="empty-icon">✦</div><strong data-i18n="emptyTitle">Hier beginnt euer Gespräch.</strong><p data-i18n="emptyText">Sende eine Testnachricht oder teile eine einmalige Einladung.</p></div></div>
+        <div class="composer-area">
+          <div id="emojiPicker" class="emoji-picker" hidden role="group" aria-label="Emoji"><button type="button">😊</button><button type="button">😂</button><button type="button">❤️</button><button type="button">👍</button><button type="button">🙏</button><button type="button">🎉</button><button type="button">🌸</button><button type="button">✨</button><button type="button">🇯🇵</button><button type="button">👋</button></div>
+          <form id="sendForm" class="composer"><button id="emojiBtn" class="emoji-button" type="button" aria-label="Emoji" aria-expanded="false">☺</button><label class="sr-only" for="messageInput" data-i18n="messageLabel">Nachricht</label><textarea id="messageInput" rows="1" maxlength="2000" data-i18n-placeholder="messagePlaceholder" placeholder="Nachricht schreiben…" required></textarea><button id="sendBtn" class="send-button" type="submit" aria-label="Send"><span aria-hidden="true">➤</span><span class="sr-only" data-i18n="send">Senden</span></button></form>
+          <p class="composer-tip" data-i18n="composerTip">Nur Testnachrichten. Keine Cloud-KI. Keine verifizierte Ende-zu-Ende-Sicherheit.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><span>Koncha · 0.2 Alpha · Kirpeit Solutions</span><span data-i18n="footer">Experimental · Local-first · No tracking</span></footer>
+  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+</div>
 </body>
 </html>

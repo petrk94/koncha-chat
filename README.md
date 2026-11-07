@@ -1,6 +1,6 @@
 # Koncha · private intercultural messenger (prototype)
 
-**Version:** 0.1.0-alpha.1 · **Status:** experimental, unaudited, not for production or confidential messages.
+**Version:** 0.2.0-alpha.1 · **Status:** experimental, unaudited, not for production or confidential messages.
 
 Koncha is a from-scratch proof of concept for two-device messaging in a mobile web app. It is inspired by *publicly documented ideas* such as out-of-band invitations and untrusted relays; **it is not a fork of SimpleX and does not implement the SimpleX SMP protocol**.
 
@@ -9,14 +9,16 @@ Koncha is a from-scratch proof of concept for two-device messaging in a mobile w
 - Responsive PWA-oriented web interface (works on Android, iPhone, desktop over HTTPS).
 - Explicit first-run storage/privacy/security onboarding and local-only display name.
 - No account, phone number, email, contact upload, analytics or tracking.
-- Create/join private experimental room via 256-bit secret in invite URL fragment.
+- One-time invitations valid for 60 minutes. The URL contains a random invite token, **not** the room key; encrypted room-key handoff occurs on the relay. Each newly created link invalidates the previous unused link.
 - Two-device text messaging with browser-side AES-256-GCM envelopes and an authenticated PHP relay.
 - Client-side IndexedDB for room keys and cached encrypted messages; relay stores ciphertext only.
-- Optional kana-to-romaji reading aid (does **not** interpret kanji and is not a translation engine).
-- Reset local data control, PHP relay with simple per-room file persistence and expiry on activity.
+- Optional kana-to-romaji reading aid (does **not** interpret kanji and is not semantic translation).
+- DE/EN/JA UI with browser-language default and manual preference, Enter-to-send (safe for Japanese IME), emoji picker, per-conversation settings.
+- Opt-in client-side translation adapter using the browser-native on-device Translator API where supported; Firefox, Safari and mobile browsers need the planned WebGPU/WASM model-worker fallback before translation can be enabled. **No cloud inference.**
+- Reset local data control, PHP relay with simple per-room file persistence and expiry on activity; expired invitation handoffs are removed at next access.
 - Unit/integration tests using Node's built-in test runner; no external runtime dependencies.
 
-**WARNING:** This is an **experimental encryption demonstration**, not audited end-to-end secure communication. Anyone with the full invite link can read and impersonate either party. There is no identity verification, ratchet, forward secrecy, message replay defense, secure recovery or protection from a compromised code-delivery server. Read [docs/SECURITY.md](docs/SECURITY.md).
+**WARNING:** This is an **experimental encryption demonstration**, not audited end-to-end secure communication. Whoever successfully redeems the invite obtains the shared room key and can impersonate either participant. Expiry or revocation prevents NEW claims only; it does not revoke access to an established chat. There is no verified identity, ratchet, forward secrecy, message replay defense, secure recovery or protection from a compromised code-delivery server. Read [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Run locally
 
@@ -56,11 +58,12 @@ git push -u origin main
 
 If SSH is not configured, use `https://github.com/petrk94/koncha-chat.git` with an appropriate GitHub credential manager.
 
-## Language goals (not implemented)
+## Language and local AI development
 
-- DE / EN / JA interface and translation choices.
-- Furigana (requires reliable kanji readings), optional romaji, Japanese politeness guidance.
-- Local/offline translation by default; cloud AI only with explicit, per-feature consent and safeguards.
+- DE/EN/JA UI, locale preference and kana-to-romaji are implemented.
+- Browser-native local Translator API integration is experimental and explicitly opt-in; not generally available in Firefox/Safari/mobile.
+- **Planned, not yet packaged:** a local browser WebGPU/WASM Worker with commercially compatible translation models for DE/EN/JA. No cloud text fallback will be introduced. See [docs/LOCAL_TRANSLATION.md](docs/LOCAL_TRANSLATION.md).
+- Furigana (requires reliable kanji readings) and Japanese politeness guidance are planned.
 
 ## Legal notes
 
@@ -73,3 +76,15 @@ For a later visibility change: GitHub repository → Settings → General → Da
 Der Quellcode liegt bereits mit initialem Commit im Git-Repository. Das mitgelieferte Skript `publish-github.sh` erstellt **explizit ein öffentliches** GitHub-Repository unter `petrk94/koncha-chat` und pusht den aktuellen Commit. Dazu wird auf deinem Rechner `gh` benötigt (Ubuntu/Zorin: `sudo apt install gh`). Einmalig bei GitHub anmelden; danach im entpackten Projekt `./publish-github.sh` ausführen. Es werden weder Zugangsdaten noch Chat-Nachrichten ins Repository eingecheckt. Das Skript bricht bei uncommitteten Änderungen oder einem vorhandenen Ziel-Repository ab.
 
 Wichtiger Hinweis: Ein einmal öffentlich gemachtes Repository kann auch nach späterer Umstellung auf privat bereits kopiert worden sein. Noch ist **keine Produktionssicherheit** gegeben.
+
+## Koncha 0.2: manual acceptance test
+
+1. Use two isolated browser profiles. Open Koncha in each and create a local identity; verify DE/EN/JA locale selection and storage disclosures.
+2. In browser A, create a room and click **Create invitation**. Open the copied `#invite=` URL in browser B within 60 minutes; it should show the invitation and then join only when accepted.
+3. Reopen the same URL: it should report the invitation was already used. Create another invitation; the previous unredeemed link must stop working. A fresh link lasts 60 minutes.
+4. Exchange test text and emojis. Verify Enter sends, Shift+Enter inserts a newline, and Japanese IME candidate confirmation does not send.
+5. Click the chat header to open settings; enable kana-to-romaji and change Enter behavior. Test manual language selection.
+6. Translation is disabled by default. In browsers without a local Translator API, turning it on should show an explicit unavailable message and **must not send plaintext to the server**.
+7. To test real iPhone/Android on separate devices, use HTTPS and not the PHP development server.
+
+The screenshot block is not available to a PWA. Real-device iOS/Android visual and keyboard tests are still pending.
