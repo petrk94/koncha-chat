@@ -69,7 +69,8 @@ function updateConversation() {
   const label = peer?.alias || t('chatName');
   $('contactName').textContent = label;
   $('headerAvatar').textContent = avatarFor(peer?.alias);
-  $('contactHandle').textContent = peer?.handle ? '@' + peer.handle : '';
+  $('contactHandle').textContent = (peer?.handle ? '@' + peer.handle + ' · ' : '')
+    + (isOlmRoom(room) ? t('olmActive') : t('olmLegacy'));
   void refreshDeviceCodes();
   renderRoomIndex();
 }
