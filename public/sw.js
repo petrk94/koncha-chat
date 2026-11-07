@@ -1,9 +1,9 @@
 /* Koncha 0.6 app-shell cache. NEVER cache /api.php or chat content. */
-const CACHE = 'koncha-shell-v0.7.0-alpha.1';
+const CACHE = 'koncha-shell-v0.8.0-alpha.1';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/crypto.js', '/db.js',
   '/i18n.js', '/identity.js', '/message-policy.js', '/notifications.js',
-  '/romanize.js', '/rooms.js', '/translation.js', '/translation-capabilities.js',
+  '/romanize.js', '/rooms.js', '/olm-store.js', '/olm-transport.js', '/translation.js', '/translation-capabilities.js',
   '/local-translation.js', '/push-client.js', '/pwa-diagnostics.js', '/icon.svg', '/icon-192.png',
   '/icon-512.png', '/manifest.webmanifest'
 ];
