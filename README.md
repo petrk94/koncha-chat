@@ -1,8 +1,16 @@
 # Koncha · private intercultural messenger (prototype)
 
-**Version:** 0.2.0-alpha.1 · **Status:** experimental, unaudited, not for production or confidential messages.
+**Version:** 0.3.0-alpha.1 · **Status:** experimental, unaudited, not for production or confidential messages.
 
 Koncha is a from-scratch proof of concept for two-device messaging in a mobile web app. It is inspired by *publicly documented ideas* such as out-of-band invitations and untrusted relays; **it is not a fork of SimpleX and does not implement the SimpleX SMP protocol**.
+
+## Version 0.3 — personal invitations and focused chat
+
+- Desktop interface now shows one conversation list and an uncluttered conversation pane; the settings are a dismissible dialog rather than a panel that pushes messages out of view. On phones the list is hidden to maximize message space.
+- A new invite URL opens a **dedicated personal invitation screen before onboarding**. It shows the inviter's self-declared display name and local handle, whether or not the recipient has already created an identity. On accept, a new recipient sets up their own local name and handle and automatically joins; declining does not create a room.
+- Invitation names/handles are contained in the URL fragment (not sent to the relay as part of HTTP requests), and embedded in the encrypted invitation handoff for a consistency check when redeemed. They are **not proof of identity**; the sender can choose any name, handles are not globally unique, and the relay/protocol cannot verify a human identity. Always compare identity out of band if important. Old 0.2 invitations without a name remain redeemable.
+- The existing 60-minute one-time invitation lifecycle, encrypted test messages, client-side translation opt-in, DE/EN/JA languages, Enter sending, and emoji remain.
+- **Security remains experimental**: the shared-room-secret design allows impersonation, no forward secrecy/ratchet or verified device identities. Only test with non-sensitive content.
 
 ## Included now
 
@@ -13,7 +21,7 @@ Koncha is a from-scratch proof of concept for two-device messaging in a mobile w
 - Two-device text messaging with browser-side AES-256-GCM envelopes and an authenticated PHP relay.
 - Client-side IndexedDB for room keys and cached encrypted messages; relay stores ciphertext only.
 - Optional kana-to-romaji reading aid (does **not** interpret kanji and is not semantic translation).
-- DE/EN/JA UI with browser-language default and manual preference, Enter-to-send (safe for Japanese IME), emoji picker, per-conversation settings.
+- DE/EN/JA UI with browser-language default and manual preference, Enter-to-send (safe for Japanese IME), emoji picker, per-conversation settings behind an overlay.
 - Opt-in client-side translation adapter using the browser-native on-device Translator API where supported; Firefox, Safari and mobile browsers need the planned WebGPU/WASM model-worker fallback before translation can be enabled. **No cloud inference.**
 - Reset local data control, PHP relay with simple per-room file persistence and expiry on activity; expired invitation handoffs are removed at next access.
 - Unit/integration tests using Node's built-in test runner; no external runtime dependencies.

@@ -62,3 +62,31 @@ test('UI strings exist for de, en and ja and retain a fallback', () => {
   }
   assert.equal(translate('unknownTranslationKey', 'ja'), 'unknownTranslationKey');
 });
+
+test('personal invitation previews a locally declared name and handle, with encrypted claim consistency', async () => {
+  const room = createRoom();
+  const invite = createInvite(room, { alias: '山田 ゆき', handle: 'yuki.yamada' });
+  const url = inviteUrl('https://koncha.example/', invite);
+  assert.match(url, /#invite=/);
+  assert.equal(url.includes(room.secret), false);
+  const preview = parseInvite(new URL(url).hash);
+  assert.equal(preview.sender, '山田 ゆき');
+  assert.equal(preview.handle, 'yuki.yamada');
+  const payload = await sealInvite(invite, room);
+  const joined = await unsealInvite(preview, payload);
+  assert.deepEqual(joined, { ...room, peer: { alias: '山田 ゆき', handle: 'yuki.yamada' } });
+  const changed = { ...preview, sender: 'Impostor' };
+  await assert.rejects(unsealInvite(changed, payload), /invite_identity_mismatch/);
+  assert.equal(JSON.stringify(payload).includes('山田'), false);
+  assert.equal(parseInvite('#invite=invalid'), null);
+});
+
+test('preview names cannot inject unsupported control characters or oversized handles', () => {
+  const room = createRoom(); const invite = createInvite(room, { alias: 'Alex', handle: 'alex.chat' });
+  const url = new URL(inviteUrl('https://koncha.example/', invite));
+  url.hash = url.hash.replace('from=Alex', 'from=Alex%0Dtest');
+  assert.equal(parseInvite(url.hash), null);
+  const url2 = new URL(inviteUrl('https://koncha.example/', invite));
+  url2.hash += '&handle=' + 'x'.repeat(300);
+  assert.equal(parseInvite(url2.hash), null);
+});

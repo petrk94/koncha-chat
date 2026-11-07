@@ -46,3 +46,9 @@ An attacker with the original invite can impersonate either party. A malicious s
 4. Abuse prevention without silent server-side access to private messages, invitation revocation, rate limits, complaint handling and optional reporting.
 5. Queue routing to reduce metadata, protocol-compatible push notification model, robust retention and deletion, and load testing.
 6. Privacy policy, relevant data-protection law review, accessibility, internationalization and business/legal release readiness.
+
+## 0.3 personal invitation and identity presentation
+
+The public invitation URL uses a fragment, e.g. `#invite=<room>.<invite>.<token>&from=<display-name>&handle=<local-handle>`. Browser fragments are not sent as part of HTTP requests. The display name/handle are **self-declared** and may be read by whoever receives or stores the URL; no central unique handle registry exists. The inviter also encrypts the same metadata inside the one-time handoff; after claim, the recipient checks that the decrypted sender/handle match what appeared in the preview. This detects a mismatch introduced by changing the link, **not the sender's real identity**. Inviter alias is never stored as plaintext by the PHP relay in this feature. Older no-name invitations remain valid if not already expired or redeemed.
+
+The incoming link now opens an independent invitation screen **before** identity onboarding. New users proceed to local identity creation only after accepting. Existing users can accept immediately. The shared room secret, absence of authenticated sender keys and lack of forward secrecy remain unchanged. Never interpret the preview as verification, even if a name and handle match. See `docs/SECURITY.md`.

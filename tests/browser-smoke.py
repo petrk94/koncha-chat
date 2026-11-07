@@ -1,9 +1,12 @@
-"""Optional local browser smoke test (requires playwright + system chromium)."""
+"""Optional real browser smoke: invitation first, then local identity, then chat.
+Requires Playwright and system Chromium. No production security assumptions.
+"""
 import os
 import subprocess
 import tempfile
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -20,36 +23,63 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
                 time.sleep(.1)
         with sync_playwright() as play:
             browser = play.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox','--no-proxy-server','--disable-features=LocalNetworkAccessChecks'])
-            a = browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':390,'height':844})
+            a = browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':1280,'height':800})
             b = browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':390,'height':844})
+            # Browser policy may block localhost. Playwright routes requests via Python's HTTP client.
+            def forward(route):
+                request = route.request
+                data = request.post_data_buffer if request.method == 'POST' else None
+                headers = {k:v for k,v in request.headers.items() if k.lower() not in ('host','content-length','connection','accept-encoding')}
+                req = urllib.request.Request(request.url, data=data, headers=headers, method=request.method)
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as res:
+                        route.fulfill(status=res.status, body=res.read(), headers=dict(res.headers))
+                except urllib.error.HTTPError as exc:
+                    route.fulfill(status=exc.code, body=exc.read(), headers=dict(exc.headers))
+            a.route('**/*', forward); b.route('**/*', forward)
             pagea=a.new_page(); pageb=b.new_page()
-            for page, name in [(pagea,'Alex'),(pageb,'Yuki')]:
-                page.goto(f'http://127.0.0.1:{PORT}/')
-                page.locator('#nickname').fill(name)
-                page.locator('#ack').check()
-                page.locator('#startBtn').click()
-                page.locator('#lobby').wait_for(state='visible')
+            pagea.goto(f'http://127.0.0.1:{PORT}/')
+            pagea.locator('#nickname').fill('Alex Becker')
+            pagea.locator('#handle').fill('alex.becker')
+            pagea.locator('#ack').check()
+            pagea.locator('#startBtn').click()
+            pagea.locator('#lobby').wait_for(state='visible')
             pagea.locator('#createBtn').click()
             pagea.locator('#chat').wait_for(state='visible')
+            pagea.locator('#settingsBtn').click()
+            pagea.locator('#chatPreferences').wait_for(state='visible')
+            assert pagea.locator('#messages').bounding_box()['height'] > 400, 'Settings must not shrink chat log'
             pagea.locator('#shareBtn').click()
             invite = pagea.evaluate('navigator.clipboard.readText()')
-            assert invite.startswith('http://127.0.0.1:18787/#invite='), invite
+            assert 'from=Alex' in invite and 'handle=alex.becker' in invite
             pageb.goto(invite)
-            pageb.locator('#pendingInvite').wait_for(state='visible')
+            pageb.locator('#invitation').wait_for(state='visible')
+            assert pageb.locator('#inviterName').inner_text() == 'Alex Becker'
+            assert pageb.locator('#inviterHandle').inner_text() == '@alex.becker'
+            assert not pageb.locator('#lobby').is_visible(), 'Invited party must not see create-room screen'
             pageb.locator('#joinBtn').click()
+            pageb.locator('#onboarding').wait_for(state='visible')
+            pageb.locator('#nickname').fill('ゆき 田中')
+            pageb.locator('#handle').fill('yuki.tanaka')
+            pageb.locator('#ack').check()
+            pageb.locator('#startBtn').click()
             pageb.locator('#chat').wait_for(state='visible')
+            assert pageb.locator('#contactName').inner_text() == 'Alex Becker'
+            pagea.locator('#closePreferences').click()
             pagea.locator('#messageInput').fill('こんにちは！')
             pagea.locator('#sendBtn').click()
             pageb.locator('.bodytext').filter(has_text='こんにちは！').wait_for(timeout=10000)
-            pageb.locator('#chatHeaderBtn').click()
+            pageb.locator('#settingsBtn').click()
             pageb.locator('#romajiToggle').check()
             pageb.locator('.romanized').filter(has_text='konnichiha').wait_for(timeout=10000)
+            pageb.locator('#closePreferences').click()
             pageb.locator('#messageInput').fill('Hi from another browser')
             pageb.locator('#messageInput').press('Enter')
             pagea.locator('.bodytext').filter(has_text='Hi from another browser').wait_for(timeout=10000)
-            pagea.screenshot(path='/mnt/data/koncha-chat-preview.png',full_page=True)
-            assert pagea.locator('.bubble').count()==2
-            print('PASS: two isolated browser profiles exchanged encrypted test messages and romaji is displayed')
+            assert pagea.locator('#contactName').inner_text() == 'ゆき 田中'
+            pagea.screenshot(path='/mnt/data/koncha-desktop-0.3-preview.png')
+            pageb.screenshot(path='/mnt/data/koncha-mobile-0.3-preview.png')
+            print('PASS: inviter and invitee onboarding, settings overlay, messages and romaji')
             browser.close()
     finally:
         p.terminate(); p.wait(timeout=5)

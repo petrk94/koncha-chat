@@ -18,6 +18,56 @@ const dictionary = {
     tagline:'あなたらしく話そう。',prototype:'試作版・安全性未検証',language:'言語',reset:'初期化',welcome:'Konchaへようこそ',onboardTitle:'プライバシーを守り、言葉をつなぐ。',onboardLead:'電話番号・公開連絡先検索・中央アカウント登録のない試験的なメッセンジャーです。',testOnly:'テストメッセージ専用。',notAudited:'本人確認や前方秘匿性は実装・検証されていません。機密情報を送らないでください。',storageTitle:'データの保存場所',localTitle:'このブラウザー内',localText:'表示名、ランダムな端末ID、ルームの鍵、暗号化されたメッセージをIndexedDBに保存します。ブラウザーデータを削除すると復元できません。',serverTitle:'テスト用中継サーバー',serverText:'ルームID、認証用ハッシュ、暗号化されたメッセージ、時刻を保存します。メッセージは24時間後、次回アクセス時に削除します。ログやバックアップは別です。',noAccountTitle:'中央アカウントなし',noAccountText:'メールアドレスやパスワードは不要。復旧・ブラウザー間の同期機能はありません。ブラウザーごとに別の端末として扱います。',nicknameLabel:'この端末での表示名',nicknamePlaceholder:'例：ゆき、Alex',ack:'この試作版のリスクと端末内保存について理解しました。',start:'ローカルIDを作成',lobbyEyebrow:'プライベートルーム',lobbyTitle:'信頼から始まる会話。',lobbyLead:'60分間だけ有効な使い捨てリンクで、1人を招待できます。使用後は無効になります。',deviceIdentity:'ローカル端末ID',createRoom:'テストルームを作成',pending:'招待リンクを確認',joinTitle:'招待が届きました。',joinHint:'このリンクは一度だけ使用できます。送信者が信頼できる場合のみ開いてください。',join:'招待を承諾する',recentRoomTitle:'前回の会話',recentRoomHint:'このブラウザーに保存されています。',resume:'会話を再開',httpsHint:'別々の端末で使うにはHTTPSが必要です。localhostは同じ端末内でのみ利用できます。',iosHint:'iPhone：Safariの共有 → ホーム画面に追加。Android：ブラウザーのメニュー → アプリをインストール。',chatEyebrow:'あなたの会話',experimental:'テストモード',sidebarHint:'招待は一度限り。連絡先検索はありません。本人認証はまだありません。',newInvite:'招待リンクを作成',leave:'戻る',revoke:'無効にする',roomWarning:'実験段階の暗号化で、送信者の本人確認はできません。秘密を送らないでください。',chatName:'プライベートテストルーム',connecting:'接続中…',connected:'接続中',offline:'オフライン・エラー',preferences:'会話の設定を開く',preferencesTitle:'会話の設定',romaji:'かなをローマ字で表示（漢字は非対応）',enterSend:'Enterで送信・Shift+Enterで改行',translateToggle:'受信メッセージを端末内で翻訳',sourceLanguage:'元の言語',targetLanguage:'翻訳先',translationHint:'対応ブラウザーのみ。クラウド翻訳は使用しません。',screenshotHint:'ブラウザーではスクリーンショットを確実に禁止・検出できません。',emptyTitle:'ここから会話が始まります。',emptyText:'テストメッセージを送るか、招待リンクを共有しましょう。',messageLabel:'メッセージ',messagePlaceholder:'メッセージを入力…',send:'送信',composerTip:'テストメッセージ専用。クラウドAIなし。E2EEの安全性未検証。',footer:'実験版・端末保存優先・追跡なし',invalidName:'名前を入力してください。',confirmAck:'試作版の注意事項を確認してください。',localError:'ローカル保存に失敗しました',roomError:'ルームを開けません',serverError:'サーバーに接続できません',sendError:'送信できません',unsupported:'HTTPS・Web Crypto・IndexedDBが必要です',resetConfirm:'この端末のすべてのKonchaデータ（鍵と会話を含む）を削除しますか？サーバー上のメッセージは削除されません。',resetError:'削除できません',inviteCopied:'使い捨てリンクをコピーしました。60分間有効です。',inviteCreated:'招待を作成しました。信頼できる相手にのみ共有してください。',inviteExpires:'招待の残り時間',inviteExpired:'招待リンクの有効期限が切れました。新しいリンクを依頼してください。',inviteUnavailable:'この招待リンクは使用済み、または無効化されています。新しいリンクを依頼してください。',inviteInvalid:'無効な招待リンクです。',invitationError:'招待を受け取れませんでした',revokeDone:'招待を無効にしました。',revokeError:'招待を無効にできませんでした',inviteMissing:'有効な招待はありません。',inviteNotice:'最初に使った人が入室できます。既存の端末のアクセス権は残ります。',translationUnsupported:'このブラウザーでは端末内翻訳を利用できません。Safari、Firefox、モバイルブラウザーは未対応です。',translationAvailable:'端末内翻訳を有効にしました。テスト用に限って利用してください。',translationDownload:'言語モデルをダウンロードしています…',translationFailed:'翻訳を有効にできませんでした。',chooseDifferent:'元の言語と翻訳先を変えてください。',languageLabel:'言語',copyPrompt:'使い捨て招待リンク：',localeChanged:'言語を変更しました',oldInvite:'旧形式の招待リンクは使用できません。新しいリンクを作成してください。',inviteSecurity:'一度限り・60分',noTranslation:'翻訳できません',chatOpen:'会話を開く',emojiLabel:'絵文字を選ぶ'
   }
 };
+// Short copy for the chat-first UI and the dedicated invitation route.
+// A handle is a locally selected label, NOT a unique or authenticated account ID.
+Object.assign(dictionary.de, {
+  alphaMark:'Alpha · Testversion', yourIdentity:'Deine Identität', onboardNewTitle:'Wie möchtest du heißen?',
+  onboardInvitedTitle:'Wie möchtest du im Chat heißen?', identityLead:'Dein Name wird bei Einladungen angezeigt. Er ist frei wählbar und nicht amtlich geprüft.',
+  handleLabel:'Benutzername', handleHint:'Lokal auf diesem Gerät. Nicht einzigartig oder verifiziert.',
+  reset:'Lokale Daten löschen', newConversation:'Koncha', lobbySimpleTitle:'Neues Gespräch',
+  lobbySimpleLead:'Beginne einen privaten Chat und lade eine Person ein.', thisDevice:'Dieses Gerät', newChat:'Neuen Chat beginnen',
+  inviteLabel:'Persönliche Einladung', invitePageTitle:'Du wurdest eingeladen',
+  invitePageLead:'Eine Person möchte mit dir chatten.', inviteFromDescription:'Diese Person lädt dich zu einem privaten Gespräch ein.',
+  unverified:'Nicht verifiziert', inviteIdentityCaution:'Der Name ist eine Angabe des Einladenden, kein Identitätsnachweis. Vergleiche ihn im Zweifel über einen anderen Kanal.',
+  checkingInvite:'Gültigkeit wird geprüft…', inviteMinutes:'Noch {minutes} Min. gültig', inviteInactive:'Nicht mehr gültig',
+  decline:'Ablehnen', conversations:'Gespräche', chatName:'Privater Chat', chatSubtitle:'Privates Gespräch',
+  sidebarBottom:'Lokal · Experimentell', inviteSection:'Einladung', invitePrivacyHint:'Einmalig und 60 Minuten gültig. Neue Links ersetzen alte.',
+  reading:'Darstellung', translationTitle:'Übersetzung', safetyDetails:'Sicherheit und Daten',
+  invalidHandle:'Benutzername: 3–24 Zeichen, beginnt mit einem Buchstaben; erlaubt sind a–z, 0–9, Punkt, Bindestrich und Unterstrich.',
+  identityMismatch:'Die Angaben zum Einladenden stimmen nicht überein. Bitte einen neuen Link auf einem bekannten Weg anfordern.'
+});
+Object.assign(dictionary.en, {
+  alphaMark:'Alpha · Test version', yourIdentity:'Your identity', onboardNewTitle:'What should we call you?',
+  onboardInvitedTitle:'How should you appear in this chat?', identityLead:'Your name is shown in invitations. It is self-declared, not verified.',
+  handleLabel:'Username', handleHint:'Stored on this device only. Not unique or verified.',
+  reset:'Delete local data', newConversation:'Koncha', lobbySimpleTitle:'New conversation',
+  lobbySimpleLead:'Start a private chat and invite one person.', thisDevice:'This device', newChat:'Start a chat',
+  inviteLabel:'Personal invitation', invitePageTitle:'You have been invited',
+  invitePageLead:'Someone wants to chat with you.', inviteFromDescription:'This person is inviting you to a private conversation.',
+  unverified:'Unverified', inviteIdentityCaution:'The name is self-declared, not proof of identity. Confirm with the sender through another channel if needed.',
+  checkingInvite:'Checking invitation…', inviteMinutes:'Valid for {minutes} more min', inviteInactive:'No longer valid',
+  decline:'Decline', conversations:'Conversations', chatName:'Private chat', chatSubtitle:'Private conversation',
+  sidebarBottom:'Local · Experimental', inviteSection:'Invitation', invitePrivacyHint:'Single-use, valid for 60 minutes. A new invitation invalidates the previous one.',
+  reading:'Display', translationTitle:'Translation', safetyDetails:'Security and data',
+  invalidHandle:'Username must be 3–24 characters, start with a letter and use only a–z, 0–9, dots, underscores or hyphens.',
+  identityMismatch:'The invitation sender details do not match. Request a new link through a trusted channel.'
+});
+Object.assign(dictionary.ja, {
+  alphaMark:'アルファ・試作版', yourIdentity:'あなたのプロフィール', onboardNewTitle:'表示名を設定',
+  onboardInvitedTitle:'チャットでの表示名', identityLead:'招待リンクに表示される名前です。本人確認は行われません。',
+  handleLabel:'ユーザー名', handleHint:'この端末だけに保存します。一意でも本人確認済みでもありません。',
+  reset:'ローカルデータを削除', newConversation:'Koncha', lobbySimpleTitle:'新しいチャット',
+  lobbySimpleLead:'プライベートチャットを作成して、相手を招待します。', thisDevice:'この端末', newChat:'チャットを始める',
+  inviteLabel:'個人招待', invitePageTitle:'チャットに招待されました',
+  invitePageLead:'あなたにチャットの招待が届いています。', inviteFromDescription:'この人からプライベートチャットに招待されています。',
+  unverified:'本人未確認', inviteIdentityCaution:'名前は招待者の自己申告であり、本人確認ではありません。必要に応じて別の方法で確認してください。',
+  checkingInvite:'招待を確認しています…', inviteMinutes:'残り{minutes}分', inviteInactive:'無効な招待',
+  decline:'辞退する', conversations:'チャット', chatName:'プライベートチャット', chatSubtitle:'プライベート会話',
+  sidebarBottom:'端末内保存 · 試作版', inviteSection:'招待', invitePrivacyHint:'1回限り、60分間有効。新しい招待を作ると以前のリンクは無効になります。',
+  reading:'表示', translationTitle:'翻訳', safetyDetails:'セキュリティとデータ',
+  invalidHandle:'ユーザー名は英字で始まる3～24文字で、英小文字・数字・ピリオド・ハイフン・アンダースコアのみ使用できます。',
+  identityMismatch:'招待者の情報が一致しません。信頼できる方法で新しいリンクを依頼してください。'
+});
 export function translate(key, language = 'de') {
   return dictionary[language]?.[key] || dictionary.en[key] || key;
 }
