@@ -62,7 +62,7 @@ function profile(identity){
 }
 function basePayload(room,identity,type,text=''){
   return {v:1,type,roomId:room.roomId,...profile(identity),
-    ts:Date.now(),nonce:randomId(16),text};
+    presenceId:room.presenceId||'',ts:Date.now(),nonce:randomId(16),text};
 }
 function peerFromPayload(payload,curve){
   if(!payload || typeof payload.sender!=='string'||payload.sender.length>32 ||
@@ -70,7 +70,8 @@ function peerFromPayload(payload,curve){
     typeof payload.senderHandle!=='string'||payload.senderHandle.length>24 ||
     !validDevicePublicKey(payload.publicKey)||!validCurve(curve))throw new Error('Invalid encrypted device identity');
   return {alias:payload.sender,handle:payload.senderHandle,publicKey:payload.publicKey,
-    presenceId:payload.presenceId||'',senderId:payload.senderId,olmCurve:curve,verified:false};
+    presenceId:payload.presenceId||'',senderId:payload.senderId,olmCurve:curve,
+    olmEd:validCurve(payload.senderEd) ? payload.senderEd : '',verified:false};
 }
 function samePublic(a,b){
   return validDevicePublicKey(a)&&validDevicePublicKey(b)&&a.x===b.x&&a.y===b.y;
@@ -109,7 +110,7 @@ export async function acceptSecureInvite(room,identity){
     if(await readOlmState(room.roomId))throw new Error('Secure room already exists on this device');
     const account=parseJSON(wasm.create_account());
     const payload={...basePayload(room,identity,'hello'),senderCurve:account.curve,
-      inviterCurve:room.olmInvitation.curve};
+      senderEd:account.ed,inviterCurve:room.olmInvitation.curve};
     payload.proof=await proof(room,account.curve,room.olmInvitation.curve,payload.senderId);
     const started=parseJSON(wasm.start_outbound(JSON.stringify(account.account),room.olmInvitation.curve,
       room.olmInvitation.oneTimeKey,JSON.stringify(payload)));
@@ -134,6 +135,8 @@ function validateMessage(room,state,payload,fromCurve){
   if(state.peerId && state.peerId!==payload.senderId)throw new Error('Olm device identifier has changed');
   if(room.peer?.publicKey&&!samePublic(room.peer.publicKey,payload.publicKey))throw new Error('Pinned signing identity changed');
   if(room.peer?.olmCurve && room.peer.olmCurve!==fromCurve)throw new Error('Pinned Olm key changed');
+  if(room.peer?.olmEd && payload.senderEd && room.peer.olmEd!==payload.senderEd)
+    throw new Error('Pinned Olm fingerprint changed');
   return peer;
 }
 export async function receiveSecureEnvelope(room,env){
