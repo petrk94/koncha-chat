@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             except Exception:
                 time.sleep(.1)
         with sync_playwright() as play:
-            browser = play.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox','--no-proxy-server','--disable-features=LocalNetworkAccessChecks'])
+            browser = play.chromium.launch(headless=True,args=['--no-sandbox','--no-proxy-server'])
             a = browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':1280,'height':800})
             b = browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':390,'height':844})
             # Browser policy may block localhost. Playwright routes requests via Python's HTTP client.
@@ -85,6 +85,10 @@ with tempfile.TemporaryDirectory(prefix='koncha-browser-') as temp:
             assert pagea.locator('link[rel=icon]').get_attribute('href').startswith('data:image/svg+xml,')
             pagea.evaluate("Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))")
             pagea.wait_for_function("!document.title.startsWith('(')", timeout=4000)
+            # Offline app shell must exist; API responses and chat content must not.
+            pagea.wait_for_function("async () => (await caches.keys()).some(n => n.startsWith('koncha-shell-'))", timeout=15000)
+            assert pagea.evaluate("async () => { const ns=await caches.keys();const c=await caches.open(ns.find(n=>n.startsWith('koncha-shell-')));return !!(await c.match('/index.html')); }"), 'App shell missing from browser cache'
+            assert pagea.evaluate("async () => { const ns=await caches.keys();const c=await caches.open(ns.find(n=>n.startsWith('koncha-shell-')));return !(await c.match('/api.php')); }"), 'API response must not be cached'
             # 0.5 multi-room integration: inviter can open a second independent chat.
             pagea.locator('#leaveBtn').click()
             pagea.locator('#lobby').wait_for(state='visible')
